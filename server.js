@@ -249,10 +249,9 @@ async function saveScan(wObj, vObj, gObj, lObj) {
         grado_cm,
         raw_a,
         raw_b,
-        variedad_nombre,
         lamina_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
 
@@ -262,7 +261,6 @@ async function saveScan(wObj, vObj, gObj, lObj) {
       wObj.tallos,         // 20
       vObj.variedad_id,    // V01
       gObj.grado_cm,       // 60
-      vObj.variedad_nombre,
       wObj.raw,            // B01-T20
       `${vObj.raw}-${gObj.raw}`, // V01-G60
       lObj.id              // L1
