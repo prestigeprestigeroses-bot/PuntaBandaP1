@@ -119,6 +119,25 @@
   color: #22c55e;
 }
 
+.workerNameHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workerCode {
+  font-size: 24px;
+  font-weight: 950;
+  color: #ffffff;
+}
+
+.workerRealName {
+  font-size: 22px;
+  font-weight: 950;
+  color: #c7d2fe;
+  text-transform: uppercase;
+}
+
 .scan-step {
   display: inline-block;
   padding: 8px 14px;
@@ -1062,10 +1081,11 @@ ctx.fill();
       div.className = "kpiCard" + (ramos > 0 ? " active" : "");
       div.innerHTML = `
         <div class="t">
-          <div class="name">
-            <span class="sw" style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${workerColors[w] || "#93C5FD"};margin-right:8px"></span>
-            ${w} <span class="hint" style="margin-left:6px;">${name}</span>
-          </div>
+          <div class="name workerNameHeader">
+  <span class="sw" style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${workerColors[w] || "#93C5FD"};margin-right:10px"></span>
+  <span class="workerCode">${w}</span>
+  <span class="workerRealName">${name}</span>
+</div>
           <div class="pill">${windowSel.value === "hour" ? "hora" : "hoy"}</div>
         </div>
 
