@@ -167,17 +167,30 @@ function parseVariedad(code) {
 function parseGrado(code) {
   const up = String(code || "").trim().toUpperCase();
 
-  // Acepta G60 o 60
-  const m = up.match(/^G?(\d{1,3})$/);
-  if (!m) return null;
+  // Grados numéricos: G60 o 60
+  const mNum = up.match(/^G?(\d{1,3})$/);
+  if (mNum) {
+    const grado_cm = parseInt(mNum[1], 10);
 
-  const grado_cm = parseInt(m[1], 10);
-  if (!Number.isFinite(grado_cm) || grado_cm <= 0) return null;
+    if (!Number.isFinite(grado_cm) || grado_cm <= 0) return null;
 
-  return {
-    grado_cm,
-    raw: `G${grado_cm}`,
-  };
+    return {
+      grado_cm: String(grado_cm),
+      raw: `G${grado_cm}`,
+    };
+  }
+
+  // Grados de texto permitidos
+  const textosPermitidos = ["NACIONAL", "BAJAS"];
+
+  if (textosPermitidos.includes(up)) {
+    return {
+      grado_cm: up,
+      raw: up,
+    };
+  }
+
+  return null;
 }
 
 // Lámina: L1, L2, L3...
@@ -309,7 +322,7 @@ app.post("/api/scan", async (req, res) => {
 
     if (!gObj) {
       return res.status(400).json({
-        error: "Grado inválido. Formato esperado: G60",
+        error: "Grado inválido. Formato esperado: G60, 60, NACIONAL o BAJAS",
       });
     }
 
