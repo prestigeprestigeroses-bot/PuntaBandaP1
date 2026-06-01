@@ -568,6 +568,8 @@ const lastLEl = $("lastLPending");
 
   let workers = ["B01","B02","B03","B04","B05","B06","B07","B08","B09","B10","B11","B12"];
   let workerNameMap = {};
+  let variedadNameMap = {};
+  let laminaNameMap = {};
   let scans = [];
   let pendingAll = {};
   let es = null;
@@ -586,6 +588,16 @@ const lastLEl = $("lastLPending");
     st.textContent = text;
     mode.textContent = m ? "· " + m : "";
   };
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[ch]));
+  }
 
   function showOfflineStatus(text, type = "warn") {
   if (!offlineStatus) return;
@@ -1521,6 +1533,18 @@ function renderAll() {
   renderTable();
 }
 
+function rememberCatalogNames(rows = scans) {
+  for (const r of rows || []) {
+    const variedadId = String(r.variedad_id || "").trim().toUpperCase();
+    const variedadNombre = String(r.variedad_nombre || "").trim();
+    if (variedadId && variedadNombre) variedadNameMap[variedadId] = variedadNombre;
+
+    const laminaId = String(r.lamina_id || "").trim().toUpperCase();
+    const laminaNombre = String(r.lamina_nombre || "").trim();
+    if (laminaId && laminaNombre) laminaNameMap[laminaId] = laminaNombre;
+  }
+}
+
   async function loadWorkers() {
   const res = await fetch(API + "/api/workers", {cache:"no-store"}).catch(()=>null);
 
@@ -1561,7 +1585,10 @@ function renderAll() {
     ]);
 
     if (pRes && pRes.ok) pendingAll = await pRes.json();
-    if (sRes && sRes.ok) scans = await sRes.json();
+    if (sRes && sRes.ok) {
+      scans = await sRes.json();
+      rememberCatalogNames(scans);
+    }
     renderAll();
   }
 
@@ -1658,6 +1685,69 @@ function parseG(code) {
   };
 }
 
+function displayWorkerScan() {
+  if (!pendingWorker) return "";
+
+  const code = pendingWorker.code || pendingWorker.raw;
+  const name = String(workerNameMap[code] || "").trim();
+
+  if (name && name !== code) return `${name} (${pendingWorker.raw})`;
+  return pendingWorker.raw;
+}
+
+function displayVariedadScan() {
+  if (!pendingV) return "";
+
+  const code = pendingV.variedad || pendingV.raw;
+  const name = String(variedadNameMap[code] || "").trim();
+
+  if (name && name !== code) return `${name} (${code})`;
+  return code;
+}
+
+function displayGradoScan() {
+  if (!pendingG) return "";
+  return `Grado ${pendingG.grado || pendingG.raw}`;
+}
+
+function displayLaminaScan() {
+  if (!pendingL) return "";
+
+  const code = pendingL.id || pendingL.raw;
+  const name = String(laminaNameMap[code] || "").trim();
+
+  if (name && name !== code) return `${name} (${code})`;
+  return code;
+}
+
+async function loadVariedadName(vObj) {
+  const code = vObj?.variedad || vObj?.raw;
+  if (!code || variedadNameMap[code]) return;
+
+  try {
+    const res = await fetch(`${API}/api/variedades/${encodeURIComponent(code)}`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.nombre) {
+      variedadNameMap[code] = data.nombre;
+      updateScanProgressUI();
+    }
+  } catch {}
+}
+
+async function loadLaminaName(lObj) {
+  const code = lObj?.id || lObj?.raw;
+  if (!code || laminaNameMap[code]) return;
+
+  try {
+    const res = await fetch(`${API}/api/laminas/${encodeURIComponent(code)}`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.nombre) {
+      laminaNameMap[code] = data.nombre;
+      updateScanProgressUI();
+    }
+  } catch {}
+}
+
   function setLastWorkerUI(txt) {
     if (!lastWorkerEl) return;
     if (txt) { lastWorkerEl.textContent = txt; lastWorkerEl.className = "mono okTxt"; }
@@ -1689,10 +1779,10 @@ function parseG(code) {
 
   function updateScanProgressUI() {
   const steps = [
-    { el: stepWorker, label: "Bonchador", done: !!pendingWorker, value: pendingWorker?.raw || "" },
-    { el: stepVariedad, label: "Variedad", done: !!pendingV, value: pendingV?.raw || "" },
-    { el: stepGrado, label: "Grado", done: !!pendingG, value: pendingG?.raw || "" },
-    { el: stepLamina, label: "Lámina", done: !!pendingL, value: pendingL?.raw || "" }
+    { el: stepWorker, label: "Bonchador", done: !!pendingWorker, value: displayWorkerScan() },
+    { el: stepVariedad, label: "Variedad", done: !!pendingV, value: displayVariedadScan() },
+    { el: stepGrado, label: "Grado", done: !!pendingG, value: displayGradoScan() },
+    { el: stepLamina, label: "Lámina", done: !!pendingL, value: displayLaminaScan() }
   ];
 
   const faltantes = [];
@@ -1704,8 +1794,8 @@ function parseG(code) {
     s.el.classList.toggle("pending", !s.done);
 
     s.el.innerHTML = s.done
-      ? `<span>${s.label}</span><b>${s.value}</b>`
-      : `<span>${s.label}</span><b>Falta</b>`;
+      ? `<span>${escapeHtml(s.label)}</span><b>${escapeHtml(s.value)}</b>`
+      : `<span>${escapeHtml(s.label)}</span><b>Falta</b>`;
 
     if (!s.done) faltantes.push(s.label);
   }
@@ -1891,6 +1981,7 @@ if (isV) {
   pendingV = v;
   setLastVUI(pendingV.raw);
   updateScanProgressUI();
+  loadVariedadName(pendingV);
   await trySendCombo();
   return;
 }
@@ -1907,6 +1998,7 @@ if (isL) {
   pendingL = l;
   setLastLUI(pendingL.raw);
   updateScanProgressUI();
+  loadLaminaName(pendingL);
   await trySendCombo();
 }
 }
@@ -2011,6 +2103,7 @@ document.addEventListener("keydown", async (e) => {
 
         if (msg.kind === "snapshot") {
           scans = msg.snapshot || [];
+          rememberCatalogNames(scans);
           pendingAll = msg.pending || {};
           if (msg.workers) {
             workers = msg.workers.map(x => String(x.code).trim().toUpperCase());
@@ -2040,6 +2133,7 @@ document.addEventListener("keydown", async (e) => {
         }
 
         if (msg.kind === "scan" && msg.reg) {
+  rememberCatalogNames([msg.reg]);
   addScanIfNotExists(msg.reg);
   renderFast();
   return;

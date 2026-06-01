@@ -243,6 +243,52 @@ async function getLaminaActiva(laminaId) {
   return result.rows[0];
 }
 
+app.get("/api/variedades/:id", async (req, res) => {
+  try {
+    const vObj = parseVariedad(req.params.id);
+    if (!vObj) {
+      return res.status(400).json({ error: "Variedad inválida" });
+    }
+
+    const variedad = await getVariedadById(vObj.variedad_id);
+    if (!variedad) {
+      return res.status(404).json({ error: "Variedad no encontrada" });
+    }
+
+    res.json(variedad);
+  } catch (err) {
+    console.error("GET /api/variedades/:id error:", err);
+    res.status(500).json({ error: "Error en DB" });
+  }
+});
+
+app.get("/api/laminas/:id", async (req, res) => {
+  try {
+    const lObj = parseLamina(req.params.id);
+    if (!lObj) {
+      return res.status(400).json({ error: "Lámina inválida" });
+    }
+
+    const lamina = await getLaminaActiva(lObj.id);
+    if (!lamina) {
+      return res.status(404).json({ error: "Lámina no encontrada" });
+    }
+
+    if (lamina.invalida) {
+      return res.status(400).json({ error: "Lámina inactiva" });
+    }
+
+    res.json({
+      id: lamina.id,
+      nombre: lamina.nombre,
+      activo: lamina.activo
+    });
+  } catch (err) {
+    console.error("GET /api/laminas/:id error:", err);
+    res.status(500).json({ error: "Error en DB" });
+  }
+});
+
 /* ==========================================================
    GUARDADO EN DB
    ========================================================== */
