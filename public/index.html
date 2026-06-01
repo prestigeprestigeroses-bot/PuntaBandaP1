@@ -919,17 +919,20 @@ function removeOfflineScan(idLocal) {
 
       const name = (workerNameMap[w] || "").trim();
       const showName = name && name.toUpperCase() !== w ? name : "";
+      const hex = workerColors[w] || "#93C5FD";
 
       ctx.save();
       ctx.translate(cx, baseY + 8);
       ctx.rotate(0);
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillStyle = "rgba(255,255,255,.96)";
+      ctx.shadowColor = rgbaFromHex(hex, .65);
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = hex;
       ctx.fillText(w, 0, 0);
       if (showName) {
         ctx.font = "900 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-        ctx.fillStyle = "rgba(206,220,245,.96)";
+        ctx.fillStyle = hex;
         ctx.fillText(fitCanvasText(ctx, showName.toUpperCase(), labelMaxW), 0, 19);
       }
       ctx.restore();
