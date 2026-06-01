@@ -1872,22 +1872,23 @@ async function loadLaminaName(lObj) {
   async function trySendCombo() {
   if (!(pendingWorker && pendingV && pendingG && pendingL)) return;
 
-  const payload = {
-    worker: pendingWorker.raw,
-    variedad: pendingV.raw,
-    grado: pendingG.raw,
-    lamina: pendingL.raw
+  const combo = {
+    worker: pendingWorker,
+    variedad: pendingV,
+    grado: pendingG,
+    lamina: pendingL
   };
 
-  const out = await sendToServer(payload);
+  const payload = {
+    worker: combo.worker.raw,
+    variedad: combo.variedad.raw,
+    grado: combo.grado.raw,
+    lamina: combo.lamina.raw
+  };
 
-  if (!out.ok) {
-    const msg = out.data?.error || "ERROR";
-    lastScanEl.textContent = `${pendingWorker.raw} / ${pendingV.raw} / ${pendingG.raw} / ${pendingL.raw} (${msg})`;
-    return;
-  }
+  const comboText = `${payload.worker} / ${payload.variedad} / ${payload.grado} / ${payload.lamina}`;
 
-  // Limpia los 4 escaneos pendientes, tanto si guardó online como offline
+  if (pendingWorker === combo.worker && pendingV === combo.variedad && pendingG === combo.grado && pendingL === combo.lamina) {
   pendingWorker = null;
   pendingV = null;
   pendingG = null;
@@ -1898,11 +1899,20 @@ async function loadLaminaName(lObj) {
   setLastGUI(null);
   setLastLUI(null);
 
+  lastScanEl.textContent = `${comboText} (enviando...)`;
   updateScanProgressUI();
+  }
 
-  // Caso sin internet: quedó guardado localmente
+  sendToServer(payload).then(async (out) => {
+
+  if (!out.ok) {
+    const msg = out.data?.error || "ERROR";
+    lastScanEl.textContent = `${comboText} (${msg})`;
+    return;
+  }
+
   if (out.offline) {
-  lastScanEl.textContent = "SIN INTERNET → Registro guardado offline pendiente por sincronizar";
+  lastScanEl.textContent = `${comboText} (SIN INTERNET, guardado offline)`;
 
   const pendientes = getOfflineQueue().length;
   showOfflineStatus(`SIN INTERNET · ${pendientes} registro(s) offline pendiente(s)`, "warn");
@@ -1917,6 +1927,7 @@ async function loadLaminaName(lObj) {
   // Caso normal: guardado en servidor
   if (out.data?.reg) {
   addScanIfNotExists(out.data.reg);
+  lastScanEl.textContent = `${comboText} (registrado)`;
   renderAll();
 
   if (typeof playOkSound === "function") {
@@ -1925,6 +1936,9 @@ async function loadLaminaName(lObj) {
 } else {
   await refreshAll();
 }
+}).catch(() => {
+  lastScanEl.textContent = `${comboText} (ERROR ENVIANDO)`;
+});
 }
 
 async function syncOfflineScans() {
