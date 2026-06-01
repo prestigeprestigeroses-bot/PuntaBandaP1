@@ -813,6 +813,17 @@ function removeOfflineScan(idLocal) {
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
+  function fitCanvasText(ctx, text, maxWidth) {
+    const clean = String(text || "").trim();
+    if (!clean || ctx.measureText(clean).width <= maxWidth) return clean;
+
+    let out = clean;
+    while (out.length > 3 && ctx.measureText(out + "...").width > maxWidth) {
+      out = out.slice(0, -1);
+    }
+    return out.length > 3 ? out + "..." : clean.slice(0, 3);
+  }
+
   function roundRectPath(ctx, x, y, w, h, r){
     const rr = Math.min(r, w/2, h/2);
     ctx.beginPath();
@@ -889,10 +900,11 @@ function removeOfflineScan(idLocal) {
 
   function drawAxisX(ctx, padL, padR, padT, padB, W, H, displayWorkers, workerNameMap, groupW, label = "") {
     const baseY = H - padB;
+    const labelMaxW = Math.max(58, groupW - 14);
 
     ctx.textAlign = "right";
     ctx.textBaseline = "top";
-    ctx.font = "800 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.font = "900 14px system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
     for (let i = 0; i < displayWorkers.length; i++) {
       const w = displayWorkers[i];
@@ -916,9 +928,9 @@ function removeOfflineScan(idLocal) {
       ctx.fillStyle = "rgba(255,255,255,.96)";
       ctx.fillText(w, 0, 0);
       if (showName) {
-        ctx.font = "700 10px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-        ctx.fillStyle = "rgba(186,205,235,.92)";
-        ctx.fillText(showName.slice(0, 14), 0, 17);
+        ctx.font = "900 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        ctx.fillStyle = "rgba(206,220,245,.96)";
+        ctx.fillText(fitCanvasText(ctx, showName.toUpperCase(), labelMaxW), 0, 19);
       }
       ctx.restore();
     }
@@ -992,7 +1004,7 @@ function removeOfflineScan(idLocal) {
     const rawMax = Math.max(1, ...values);
     const niceMax = computeNiceMax(rawMax);
 
-    const padL = 56, padR = 36, padT = 48, padB = 78;
+    const padL = 56, padR = 36, padT = 48, padB = 92;
     const baseY = H - padB;
     const usableW = W - padL - padR;
     const usableH = H - padT - padB - 35;
@@ -1119,7 +1131,7 @@ function removeOfflineScan(idLocal) {
       ctx.clearRect(0,0,W,H);
       drawChartBackground(ctx, W, H);
 
-      const padL = 56, padR = 36, padT = 48, padB = 78;
+      const padL = 56, padR = 36, padT = 48, padB = 92;
       const winLabel = windowSel.value === "hour" ? "Última hora" : "Total hoy";
       const onlyActive = (activeSel.value === "active");
 
