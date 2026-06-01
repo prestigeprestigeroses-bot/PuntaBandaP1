@@ -68,13 +68,18 @@
 
     .chartWrap{
       position: relative;
-      border:1px solid var(--line);
+      border:1px solid rgba(96,165,250,.45);
       border-radius:12px;
-      background:linear-gradient(180deg, rgba(10,18,32,.35), rgba(10,18,32,.15));
+      background:
+        radial-gradient(circle at 50% 0%, rgba(59,130,246,.16), transparent 48%),
+        linear-gradient(180deg, rgba(5,12,26,.98), rgba(7,15,31,.94));
       margin-top:10px;
       overflow:hidden;
+      box-shadow:
+        inset 0 0 0 1px rgba(147,197,253,.08),
+        0 14px 30px rgba(0,0,0,.28);
     }
-    #chart{display:block;width:100%;height:360px}
+    #chart{display:block;width:100%;height:430px}
 
     .chartTip{
       position:absolute;
@@ -586,7 +591,11 @@ const lastLEl = $("lastLPending");
   let pendingL = null;      // { raw, id }
   let pendingG = null;
 
-  const palette = ["#f3ff05","#16A34A","#F97316","#DC2626","#fc9df8","#a8e5f7","#EAB308","#059e8d","#6b8a7f","#18fa0c"];
+  const palette = [
+    "#FACC15", "#22C55E", "#F97316", "#EF4444",
+    "#EC4899", "#06B6D4", "#A855F7", "#14B8A6",
+    "#84CC16", "#3B82F6", "#FB7185", "#F59E0B"
+  ];
   const workerColors = {};
   workers.forEach((w, i) => workerColors[w] = palette[i % palette.length]);
 
@@ -791,6 +800,19 @@ function removeOfflineScan(idLocal) {
   }
 
   function crisp(v) { return Math.round(v) + 0.5; }
+  function hexToRgb(hex) {
+    const clean = String(hex || "").replace("#", "");
+    const full = clean.length === 3 ? clean.split("").map(ch => ch + ch).join("") : clean;
+    const n = parseInt(full, 16);
+    if (!Number.isFinite(n)) return { r: 59, g: 130, b: 246 };
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  function rgbaFromHex(hex, alpha) {
+    const { r, g, b } = hexToRgb(hex);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   function roundRectPath(ctx, x, y, w, h, r){
     const rr = Math.min(r, w/2, h/2);
     ctx.beginPath();
@@ -823,8 +845,8 @@ function removeOfflineScan(idLocal) {
     const baseY = H - padB;
     const usableH = H - padT - padB - 35;
 
-    ctx.strokeStyle = "rgba(147,197,253,.55)";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "rgba(147,197,253,.70)";
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(padL, baseY);
     ctx.lineTo(padL, padT + 10);
@@ -832,8 +854,8 @@ function removeOfflineScan(idLocal) {
 
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    ctx.font = "600 11px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    ctx.fillStyle = "rgba(214,230,255,.95)";
+    ctx.font = "800 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillStyle = "rgba(226,238,255,.98)";
     ctx.strokeStyle = "rgba(147,197,253,.25)";
 
     const step = niceMax / ticks;
@@ -852,13 +874,13 @@ function removeOfflineScan(idLocal) {
     ctx.save();
     ctx.translate(padL - 32, padT + (usableH / 2));
     ctx.rotate(-Math.PI / 2);
-    ctx.font = "700 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    ctx.fillStyle = "rgba(214,230,255,.85)";
+    ctx.font = "900 13px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillStyle = "rgba(226,238,255,.95)";
     ctx.fillText(label, 0, 0);
     ctx.restore();
 
-    ctx.strokeStyle = "rgba(147,197,253,.55)";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "rgba(147,197,253,.70)";
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(padL, baseY + 0.5);
     ctx.lineTo(W - padR, baseY + 0.5);
@@ -870,7 +892,7 @@ function removeOfflineScan(idLocal) {
 
     ctx.textAlign = "right";
     ctx.textBaseline = "top";
-    ctx.font = "600 11px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.font = "800 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
     for (let i = 0; i < displayWorkers.length; i++) {
       const w = displayWorkers[i];
@@ -884,15 +906,20 @@ function removeOfflineScan(idLocal) {
       ctx.stroke();
 
       const name = (workerNameMap[w] || "").trim();
-      const show = name && name.toUpperCase() !== w ? name : w;
+      const showName = name && name.toUpperCase() !== w ? name : "";
 
       ctx.save();
       ctx.translate(cx, baseY + 8);
       ctx.rotate(0);
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillStyle = "rgba(214,230,255,.9)";
-      ctx.fillText(show, 0, 0);
+      ctx.fillStyle = "rgba(255,255,255,.96)";
+      ctx.fillText(w, 0, 0);
+      if (showName) {
+        ctx.font = "700 10px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+        ctx.fillStyle = "rgba(186,205,235,.92)";
+        ctx.fillText(showName.slice(0, 14), 0, 17);
+      }
       ctx.restore();
     }
 
@@ -917,7 +944,7 @@ function removeOfflineScan(idLocal) {
     for (let i = 1; i <= ticks; i++) {
       const v = i * step;
       const y = baseY - (v / niceMax) * usableH;
-      ctx.strokeStyle = "rgba(31,51,88,.45)";
+      ctx.strokeStyle = "rgba(96,165,250,.22)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(padL, crisp(y));
@@ -928,9 +955,26 @@ function removeOfflineScan(idLocal) {
 
   function getGradient(ctx, x, y, w, h, hex){
     const g = ctx.createLinearGradient(0, y, 0, y+h);
-    g.addColorStop(0, hex);
-    g.addColorStop(1, "rgba(255,255,255,0.10)");
+    g.addColorStop(0, "rgba(255,255,255,.95)");
+    g.addColorStop(0.12, hex);
+    g.addColorStop(0.68, hex);
+    g.addColorStop(1, rgbaFromHex(hex, .62));
     return g;
+  }
+
+  function drawChartBackground(ctx, W, H) {
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "rgba(5,12,26,.98)");
+    bg.addColorStop(0.58, "rgba(8,18,37,.96)");
+    bg.addColorStop(1, "rgba(3,8,18,.98)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const glow = ctx.createRadialGradient(W * .5, 0, 0, W * .5, 0, Math.max(W, H) * .55);
+    glow.addColorStop(0, "rgba(59,130,246,.16)");
+    glow.addColorStop(1, "rgba(59,130,246,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
   }
 
   function drawWorkerChart(displayWorkers, counts, stems, noAnimation = false) {
@@ -940,11 +984,7 @@ function removeOfflineScan(idLocal) {
     const W = cssW, H = cssH;
     ctx.clearRect(0, 0, W, H);
 
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, "rgba(11,18,32,0.55)");
-    bg.addColorStop(1, "rgba(11,18,32,0.20)");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
+    drawChartBackground(ctx, W, H);
 
     const values = displayWorkers.map(w => counts[w] || 0);
     const stemValues = displayWorkers.map(w => stems[w] || 0);
@@ -952,7 +992,7 @@ function removeOfflineScan(idLocal) {
     const rawMax = Math.max(1, ...values);
     const niceMax = computeNiceMax(rawMax);
 
-    const padL = 44, padR = 24, padT = 36, padB = 60;
+    const padL = 56, padR = 36, padT = 48, padB = 78;
     const baseY = H - padB;
     const usableW = W - padL - padR;
     const usableH = H - padT - padB - 35;
@@ -960,8 +1000,8 @@ function removeOfflineScan(idLocal) {
     const winLabel = windowSel.value === "hour" ? "Última hora" : "Total hoy";
     const onlyActive = (activeSel.value === "active");
 
-    ctx.fillStyle = "white";
-    ctx.font = "700 14px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillStyle = "rgba(255,255,255,.98)";
+    ctx.font = "900 17px system-ui, -apple-system, Segoe UI, Roboto, Arial";
     ctx.textAlign = "left";
     ctx.fillText(`Rendimiento por bonchador (${winLabel})${onlyActive ? " — Solo activos" : ""}`, padL, padT);
 
@@ -983,7 +1023,7 @@ function removeOfflineScan(idLocal) {
     drawAxisY(ctx, padL, padR, padT, padB, W, H, niceMax, 5, "Ramos");
 
     const groupW = usableW / Math.max(1, displayWorkers.length);
-    const barW = Math.max(22, Math.min(62, groupW - 14));
+    const barW = Math.max(34, Math.min(82, groupW - 20));
     drawAxisX(ctx, padL, padR, padT, padB, W, H, displayWorkers, workerNameMap, groupW, "");
 
     const radius = Math.min(10, barW/2);
@@ -1019,31 +1059,52 @@ function removeOfflineScan(idLocal) {
         const y = baseY - h;
 
         const hex = (workerColors[w] || "#3B82F6");
-        ctx.fillStyle = hex;
-roundRectPath(ctx, x, y, barW, h, radius);
-ctx.fill();
 
-        ctx.strokeStyle = "rgba(0,0,0,.25)";
-        ctx.lineWidth = 1;
+        ctx.save();
+        ctx.shadowColor = rgbaFromHex(hex, .58);
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = getGradient(ctx, x, y, barW, Math.max(h, 1), hex);
+        roundRectPath(ctx, x, y, barW, h, radius);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.strokeStyle = rgbaFromHex(hex, .95);
+        ctx.lineWidth = 2;
         roundRectPath(ctx, x, y, barW, h, radius);
         ctx.stroke();
+
+        ctx.fillStyle = "rgba(255,255,255,.24)";
+        roundRectPath(ctx, x + 7, y + 8, Math.max(5, barW * .18), Math.max(0, h - 16), Math.min(8, radius));
+        ctx.fill();
 
         const line1 = `${t} tallos`;
         const line2 = `${r} ramos`;
         const cx = x + (barW / 2);
 
-        ctx.font = "700 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-        ctx.fillStyle = "white";
+        ctx.font = "900 13px system-ui, -apple-system, Segoe UI, Roboto, Arial";
         if (h < 44) {
+          ctx.fillStyle = "rgba(3,7,18,.82)";
+          roundRectPath(ctx, cx - 38, y - 39, 76, 35, 8);
+          ctx.fill();
+          ctx.strokeStyle = rgbaFromHex(hex, .75);
+          ctx.lineWidth = 1.3;
+          roundRectPath(ctx, cx - 38, y - 39, 76, 35, 8);
+          ctx.stroke();
+          ctx.fillStyle = "white";
           ctx.fillText(line1, cx, y - 18);
           ctx.fillText(line2, cx, y - 2);
         } else {
-          ctx.fillStyle = "rgba(0,0,0,0.28)";
-          roundRectPath(ctx, cx - (barW-10)/2, y + (h/2) - 20, barW-10, 40, 8);
+          const pillW = Math.max(barW + 16, 82);
+          ctx.fillStyle = "rgba(3,7,18,0.72)";
+          roundRectPath(ctx, cx - pillW/2, y + (h/2) - 24, pillW, 48, 10);
           ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,.28)";
+          ctx.lineWidth = 1;
+          roundRectPath(ctx, cx - pillW/2, y + (h/2) - 24, pillW, 48, 10);
+          ctx.stroke();
           ctx.fillStyle = "white";
-          ctx.fillText(line1, cx, y + (h/2) - 4);
-          ctx.fillText(line2, cx, y + (h/2) + 12);
+          ctx.fillText(line1, cx, y + (h/2) - 6);
+          ctx.fillText(line2, cx, y + (h/2) + 13);
         }
 
         barRects.push({x, y, w: barW, h, worker: w, ramos: r, tallos: t, cx});
@@ -1056,18 +1117,14 @@ ctx.fill();
 
       const W = cssW, H = cssH;
       ctx.clearRect(0,0,W,H);
-      const bg = ctx.createLinearGradient(0, 0, 0, H);
-      bg.addColorStop(0, "rgba(11,18,32,0.55)");
-      bg.addColorStop(1, "rgba(11,18,32,0.20)");
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, W, H);
+      drawChartBackground(ctx, W, H);
 
-      const padL = 44, padR = 24, padT = 36, padB = 60;
+      const padL = 56, padR = 36, padT = 48, padB = 78;
       const winLabel = windowSel.value === "hour" ? "Última hora" : "Total hoy";
       const onlyActive = (activeSel.value === "active");
 
-      ctx.fillStyle = "white";
-      ctx.font = "700 14px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.fillStyle = "rgba(255,255,255,.98)";
+      ctx.font = "900 17px system-ui, -apple-system, Segoe UI, Roboto, Arial";
       ctx.textAlign = "left";
       ctx.fillText(`Rendimiento por bonchador (${winLabel})${onlyActive ? " — Solo activos" : ""}`, padL, padT);
 
