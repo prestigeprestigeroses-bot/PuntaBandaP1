@@ -248,7 +248,9 @@
 }
 
 .scan-step {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 14px;
@@ -256,6 +258,12 @@
   border: 1px solid rgba(155,176,208,.35);
   background: rgba(10,18,32,.45);
   color: #9bb0d0;
+}
+
+.scan-step b {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 950;
 }
 
 .scan-step.done {
@@ -1681,10 +1689,10 @@ function parseG(code) {
 
   function updateScanProgressUI() {
   const steps = [
-    { el: stepWorker, label: "Bonchador", done: !!pendingWorker },
-    { el: stepVariedad, label: "Variedad", done: !!pendingV },
-    { el: stepGrado, label: "Grado", done: !!pendingG },
-    { el: stepLamina, label: "Lámina", done: !!pendingL }
+    { el: stepWorker, label: "Bonchador", done: !!pendingWorker, value: pendingWorker?.raw || "" },
+    { el: stepVariedad, label: "Variedad", done: !!pendingV, value: pendingV?.raw || "" },
+    { el: stepGrado, label: "Grado", done: !!pendingG, value: pendingG?.raw || "" },
+    { el: stepLamina, label: "Lámina", done: !!pendingL, value: pendingL?.raw || "" }
   ];
 
   const faltantes = [];
@@ -1696,7 +1704,7 @@ function parseG(code) {
     s.el.classList.toggle("pending", !s.done);
 
     s.el.innerHTML = s.done
-      ? `<span>${s.label}</span><b>OK</b>`
+      ? `<span>${s.label}</span><b>${s.value}</b>`
       : `<span>${s.label}</span><b>Falta</b>`;
 
     if (!s.done) faltantes.push(s.label);
