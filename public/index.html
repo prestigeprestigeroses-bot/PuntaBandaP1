@@ -1331,7 +1331,7 @@ function removeOfflineScan(idLocal) {
       row.className = "row2";
       row.innerHTML = `
         <input class="mono" value="${w}" disabled />
-        <input data-worker="${w}" placeholder="Nombre (ej: Juan)" value="${(workerNameMap[w] || "")}" />
+        <input data-worker="${w}" placeholder="Nombre (ej: Juan)" value="${(workerNameMap[w] || w)}" />
       `;
       namesBox.appendChild(row);
     }
@@ -1386,8 +1386,7 @@ function removeOfflineScan(idLocal) {
 
     for (const inp of inputs) {
       const code = inp.dataset.worker;
-      const name = (inp.value || "").trim();
-      if (!name) continue;
+      const name = (inp.value || "").trim() || code;
 
       try {
         const res = await fetch(`${API}/api/workers`, {

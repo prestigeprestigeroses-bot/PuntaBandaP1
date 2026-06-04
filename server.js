@@ -73,14 +73,25 @@ app.get("/api/workers", (req, res) => {
 });
 
 // Guardar/actualizar nombre de bonchador (en memoria)
-app.post("/api/workers", (req, res) => {
-  const { code, name } = req.body || {};
-  if (!code || !name) {
-    return res.status(400).json({ error: "Faltan datos" });
-  }
+app.post("/api/workers", async (req, res) => {
+  try {
+    const { code, name } = req.body || {};
+    const workerCode = String(code || "").trim().toUpperCase();
 
-  workerNameMap[String(code).toUpperCase()] = String(name).trim();
-  res.json({ ok: true });
+    if (!workerCode) {
+      return res.status(400).json({ error: "Falta el código del bonchador" });
+    }
+
+    const workerName = String(name || "").trim() || workerCode;
+    workerNameMap[workerCode] = workerName;
+
+    await updateTodayWorkerName(workerCode, workerName);
+
+    res.json({ ok: true, code: workerCode, name: workerName });
+  } catch (err) {
+    console.error("POST /api/workers error:", err);
+    res.status(500).json({ error: "Error guardando bonchador" });
+  }
 });
 
 // Traer escaneos recientes (con nombre de variedad por JOIN y nombre de lámina por JOIN)
@@ -331,6 +342,26 @@ async function ensureScansNameColumns() {
   `);
 
   scansNameColumnsReady = true;
+}
+
+async function updateTodayWorkerName(workerCode, workerName) {
+  await ensureScansNameColumns();
+
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  await pool.query(
+    `
+    UPDATE public.scans
+    SET worker_name = $2
+    WHERE UPPER(worker) = $1
+      AND ts >= $3
+      AND ts < $4
+    `,
+    [String(workerCode || "").toUpperCase(), workerName || workerCode, start, end]
+  );
 }
 
 async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, laminaNombre) {
