@@ -7,11 +7,13 @@
 //   • Lámina           : L1, L2, L3 ...
 //
 // Guarda en DB:
-//   worker, tallos, variedad_id, grado_cm, lamina_id
+//   worker, worker_name, tallos, variedad_id, grado_cm, lamina_id, lamina_nombre
 //
 // Requisito en DB:
 //   ALTER TABLE public.scans
 //   ADD COLUMN IF NOT EXISTS lamina_id character varying(20);
+//   ADD COLUMN IF NOT EXISTS worker_name character varying(120);
+//   ADD COLUMN IF NOT EXISTS lamina_nombre character varying(120);
 //
 // Incluye SSE para actualizaciones en tiempo real.
 // -------------------------------------------------------------
@@ -44,6 +46,7 @@ const WORKER_MAX = 12;
 
 // Mapa en memoria de nombres de bonchadores (p.ej. { B16: "Juan" })
 let workerNameMap = {};
+let scansNameColumnsReady = false;
 
 // Conjunto de clientes SSE conectados
 const clients = new Set();
@@ -83,6 +86,8 @@ app.post("/api/workers", (req, res) => {
 // Traer escaneos recientes (con nombre de variedad por JOIN y nombre de lámina por JOIN)
 app.get("/api/scans", async (req, res) => {
   try {
+    await ensureScansNameColumns();
+
     const limit = parseInt(req.query.limit, 10) || 200;
 
     const query = `
@@ -90,6 +95,7 @@ app.get("/api/scans", async (req, res) => {
         s.id,
         s.ts, 
         s.worker, 
+        COALESCE(s.worker_name, s.worker) AS worker_name,
         s.tallos, 
         s.variedad_id, 
         s.grado_cm,
@@ -97,7 +103,7 @@ app.get("/api/scans", async (req, res) => {
         s.raw_a,
         s.raw_b,
         COALESCE(v.nombre, s.variedad_id) AS variedad_nombre,
-        COALESCE(l.nombre, s.lamina_id) AS lamina_nombre
+        COALESCE(s.lamina_nombre, l.nombre, s.lamina_id) AS lamina_nombre
       FROM scans s
       LEFT JOIN variedades v ON s.variedad_id = v.id
       LEFT JOIN lamina l ON s.lamina_id = l.id
@@ -109,7 +115,7 @@ app.get("/api/scans", async (req, res) => {
 
     const finalData = result.rows.map((row) => ({
       ...row,
-      worker_name: row.worker ? (workerNameMap[row.worker] || row.worker) : null,
+      worker_name: row.worker_name || (row.worker ? (workerNameMap[row.worker] || row.worker) : null),
     }));
 
     res.json(finalData);
@@ -293,7 +299,43 @@ app.get("/api/laminas/:id", async (req, res) => {
    GUARDADO EN DB
    ========================================================== */
 
-async function saveScan(wObj, vObj, gObj, lObj, variedadNombre) {
+async function ensureScansNameColumns() {
+  if (scansNameColumnsReady) return;
+
+  await pool.query(`
+    ALTER TABLE public.scans
+    ADD COLUMN IF NOT EXISTS worker_name character varying(120),
+    ADD COLUMN IF NOT EXISTS lamina_nombre character varying(120)
+  `);
+
+  await pool.query(`
+    UPDATE public.scans
+    SET worker_name = worker
+    WHERE (worker_name IS NULL OR worker_name = '')
+      AND worker IS NOT NULL
+  `);
+
+  await pool.query(`
+    UPDATE public.scans s
+    SET lamina_nombre = COALESCE(l.nombre, s.lamina_id)
+    FROM public.lamina l
+    WHERE UPPER(l.id) = UPPER(s.lamina_id)
+      AND (s.lamina_nombre IS NULL OR s.lamina_nombre = '')
+  `);
+
+  await pool.query(`
+    UPDATE public.scans
+    SET lamina_nombre = lamina_id
+    WHERE (lamina_nombre IS NULL OR lamina_nombre = '')
+      AND lamina_id IS NOT NULL
+  `);
+
+  scansNameColumnsReady = true;
+}
+
+async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, laminaNombre) {
+  await ensureScansNameColumns();
+
   const client = await pool.connect();
 
   try {
@@ -303,28 +345,32 @@ async function saveScan(wObj, vObj, gObj, lObj, variedadNombre) {
       INSERT INTO scans (
         ts,
         worker,
+        worker_name,
         tallos,
         variedad_id,
         variedad_nombre,
         grado_cm,
         raw_a,
         raw_b,
-        lamina_id
+        lamina_id,
+        lamina_nombre
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `;
 
     const values = [
       localTimestamp,
       wObj.code,           // B01
+      workerName,
       wObj.tallos,         // 20
       vObj.variedad_id,    // V01
       variedadNombre,
       gObj.grado_cm,       // 60
       wObj.raw,            // B01-T20
       `${vObj.raw}-${gObj.raw}`, // V01-G60
-      lObj.id              // L1
+      lObj.id,             // L1
+      laminaNombre
     ];
 
     const result = await client.query(query, values);
@@ -400,13 +446,24 @@ app.post("/api/scan", async (req, res) => {
       });
     }
 
-    const savedReg = await saveScan(wObj, vObj, gObj, lObj, variedadDb.nombre);
+    const workerName = workerNameMap[wObj.code] || wObj.code;
+    const laminaNombre = laminaDb.nombre || lObj.id;
+
+    const savedReg = await saveScan(
+      wObj,
+      vObj,
+      gObj,
+      lObj,
+      variedadDb.nombre,
+      workerName,
+      laminaNombre
+    );
 
     const broadcastData = {
       ...savedReg,
       variedad_nombre: variedadDb.nombre || vObj.variedad_id,
-      worker_name: workerNameMap[savedReg.worker] || savedReg.worker,
-      lamina_nombre: laminaDb.nombre || lObj.id,
+      worker_name: savedReg.worker_name || workerName,
+      lamina_nombre: savedReg.lamina_nombre || laminaNombre,
     };
 
     broadcast({ kind: "scan", reg: broadcastData });
