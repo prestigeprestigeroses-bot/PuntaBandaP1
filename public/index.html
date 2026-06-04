@@ -381,8 +381,8 @@
 
   <div class="row2" style="width:420px;max-width:40%;">
     <select id="windowSel">
+      <option value="today" selected>Total hoy</option>
       <option value="hour">Última hora</option>
-      <option value="today">Total hoy</option>
     </select>
 
     <select id="activeSel" title="Qué mostrar">
@@ -676,7 +676,7 @@ function hideOfflineStatusAfter(ms = 5000) {
       const start = new Date(now.getTime() - 60*60*1000);
       return d >= start && d <= now;
     }
-    return sameDay(d, now);
+    return true;
   }
   function getFilteredScans() {
   return scans.filter(r => windowFilter(r.ts));
@@ -1659,7 +1659,7 @@ function rememberCatalogNames(rows = scans) {
   async function refreshAll() {
     const [pRes, sRes] = await Promise.all([
       fetch(API + "/api/pendingAll", {cache:"no-store"}).catch(()=>null),
-      fetch(API + "/api/scans?limit=500", {cache:"no-store"})
+      fetch(API + "/api/scans?day=today&limit=30000", {cache:"no-store"})
     ]);
 
     if (pRes && pRes.ok) pendingAll = await pRes.json();

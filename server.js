@@ -100,6 +100,22 @@ app.get("/api/scans", async (req, res) => {
     await ensureScansNameColumns();
 
     const limit = parseInt(req.query.limit, 10) || 200;
+    const day = String(req.query.day || "").trim().toLowerCase();
+    const params = [];
+    let whereSql = "";
+
+    if (day === "today") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+
+      params.push(start, end);
+      whereSql = `WHERE s.ts >= $1 AND s.ts < $2`;
+    }
+
+    params.push(limit);
+    const limitParam = params.length;
 
     const query = `
       SELECT 
@@ -118,11 +134,12 @@ app.get("/api/scans", async (req, res) => {
       FROM scans s
       LEFT JOIN variedades v ON s.variedad_id = v.id
       LEFT JOIN lamina l ON s.lamina_id = l.id
+      ${whereSql}
       ORDER BY s.ts DESC 
-      LIMIT $1
+      LIMIT $${limitParam}
     `;
 
-    const result = await pool.query(query, [limit]);
+    const result = await pool.query(query, params);
 
     const finalData = result.rows.map((row) => ({
       ...row,
