@@ -440,6 +440,14 @@
       <option value="">Todos los bonchadores</option>
     </select>
 
+    <select id="variedadFilter" style="width:220px;">
+      <option value="">Todas las variedades</option>
+    </select>
+
+    <select id="laminaFilter" style="width:220px;">
+      <option value="">Todas las láminas</option>
+    </select>
+
     <div class="hint" id="countInfo">0</div>
   </div>
 </div>
@@ -561,6 +569,8 @@ const tbVariedad = $("tbVariedad");
   const tb = $("tb");
   const countInfo = $("countInfo");
   const workerFilter = $("workerFilter");
+  const variedadFilter = $("variedadFilter");
+  const laminaFilter = $("laminaFilter");
   const scanProgressBox = $("scanProgressBox");
 const stepWorker = $("stepWorker");
 const stepVariedad = $("stepVariedad");
@@ -1355,11 +1365,11 @@ function removeOfflineScan(idLocal) {
 }
   function populateFilterOptions() {
   const laminas = [...new Set(
-    scans.map(r => String(r.lamina_id || r.lamina_nombre || "").trim()).filter(Boolean)
+    scans.map(r => String(r.lamina_nombre || r.lamina_id || "").trim()).filter(Boolean)
   )].sort();
 
   const variedades = [...new Set(
-    scans.map(r => String(r.variedad_id || r.variedad_nombre || "").trim()).filter(Boolean)
+    scans.map(r => String(r.variedad_nombre || r.variedad_id || "").trim()).filter(Boolean)
   )].sort();
 
   const currentLamina = laminaFilter.value;
@@ -1437,11 +1447,22 @@ function removeOfflineScan(idLocal) {
   tb.innerHTML = "";
 
   const workerSelected = (workerFilter?.value || "").trim().toUpperCase();
+  const variedadSelected = (variedadFilter?.value || "").trim().toUpperCase();
+  const laminaSelected = (laminaFilter?.value || "").trim().toUpperCase();
 
   const rows = getFilteredScans()
     .filter(r => {
-      if (!workerSelected) return true;
-      return String(r.worker || "").trim().toUpperCase() === workerSelected;
+      const worker = String(r.worker || "").trim().toUpperCase();
+      const variedadId = String(r.variedad_id || "").trim().toUpperCase();
+      const variedadNombre = String(r.variedad_nombre || "").trim().toUpperCase();
+      const laminaId = String(r.lamina_id || "").trim().toUpperCase();
+      const laminaNombre = String(r.lamina_nombre || "").trim().toUpperCase();
+
+      if (workerSelected && worker !== workerSelected) return false;
+      if (variedadSelected && variedadId !== variedadSelected && variedadNombre !== variedadSelected) return false;
+      if (laminaSelected && laminaId !== laminaSelected && laminaNombre !== laminaSelected) return false;
+
+      return true;
     })
     .sort((a,b) => new Date(b.ts) - new Date(a.ts))
     .slice(0, 150);
@@ -1608,6 +1629,7 @@ function renderAll() {
   renderWorkerCards(displayWorkers, counts, stems);
   renderSummaryByLamina();
   renderSummaryByVariedad();
+  populateFilterOptions();
   renderTable();
 }
 
@@ -2172,6 +2194,8 @@ document.addEventListener("keydown", async (e) => {
   activeSel.addEventListener("change", renderAll);
   btnSaveNames.addEventListener("click", saveNames);
   workerFilter?.addEventListener("change", renderAll);
+  variedadFilter?.addEventListener("change", renderAll);
+  laminaFilter?.addEventListener("change", renderAll);
 
   let pollTimer = null;
 
@@ -2257,6 +2281,7 @@ if (msg.kind === "delete" && msg.id) {
   renderWorkerCards(displayWorkers, counts, stems);
   renderSummaryByLamina();
   renderSummaryByVariedad();
+  populateFilterOptions();
   renderTable();
 }
 
