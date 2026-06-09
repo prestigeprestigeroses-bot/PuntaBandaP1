@@ -1660,6 +1660,22 @@ function rememberCatalogNames(rows = scans) {
   }
 }
 
+function mergeScans(rows = []) {
+  const map = new Map();
+
+  for (const r of scans || []) {
+    if (r?.id != null) map.set(String(r.id), r);
+  }
+
+  for (const r of rows || []) {
+    if (r?.id != null) map.set(String(r.id), r);
+  }
+
+  scans = [...map.values()]
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))
+    .slice(0, 30000);
+}
+
   async function loadWorkers() {
   const res = await fetch(API + "/api/workers", {cache:"no-store"}).catch(()=>null);
 
@@ -1701,8 +1717,9 @@ function rememberCatalogNames(rows = scans) {
 
     if (pRes && pRes.ok) pendingAll = await pRes.json();
     if (sRes && sRes.ok) {
-      scans = await sRes.json();
-      rememberCatalogNames(scans);
+      const serverScans = await sRes.json();
+      mergeScans(serverScans);
+      rememberCatalogNames(serverScans);
     }
     renderAll();
   }
@@ -1973,14 +1990,18 @@ async function loadLaminaName(lObj) {
   function addScanIfNotExists(reg) {
   if (!reg || reg.id == null) return;
 
-  const exists = scans.some(r => String(r.id) === String(reg.id));
+  const idx = scans.findIndex(r => String(r.id) === String(reg.id));
 
-  if (!exists) {
+  if (idx >= 0) {
+    scans[idx] = { ...scans[idx], ...reg };
+  } else {
     scans.unshift(reg);
   }
 
-  if (scans.length > 500) {
-    scans = scans.slice(0, 500);
+  scans.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+
+  if (scans.length > 30000) {
+    scans = scans.slice(0, 30000);
   }
 }
 
@@ -2225,7 +2246,10 @@ document.addEventListener("keydown", async (e) => {
 
     es.onopen = () => {
       setStatus(true, "Conectado", "SSE");
-      startPollingFallback();
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
     };
 
     es.onmessage = (ev) => {
@@ -2233,8 +2257,9 @@ document.addEventListener("keydown", async (e) => {
         const msg = JSON.parse(ev.data);
 
         if (msg.kind === "snapshot") {
-          scans = msg.snapshot || [];
-          rememberCatalogNames(scans);
+          const snapshotScans = msg.snapshot || [];
+          mergeScans(snapshotScans);
+          rememberCatalogNames(snapshotScans);
           pendingAll = msg.pending || {};
           if (msg.workers) {
             workers = msg.workers.map(x => String(x.code).trim().toUpperCase());
