@@ -300,6 +300,21 @@
   color: #86efac;
 }
 
+.scan-sticky-bar {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  margin: -12px -12px 10px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255,23,68,.18), transparent 42%),
+    linear-gradient(180deg, rgba(11,18,32,.98), rgba(15,27,47,.94));
+  border-bottom: 1px solid rgba(96,165,250,.35);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 12px 28px rgba(0,0,0,.35);
+  backdrop-filter: blur(10px);
+}
+
     .scroll{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:12px;margin-top:10px}
     table{width:100%;border-collapse:collapse;font-size:12px}
     thead th{position:sticky;top:0;background:rgba(15,27,47,.95);color:var(--muted);text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
@@ -362,7 +377,7 @@
 
   <div class="grid">
     <div class="card right card-rendimiento">
-    <div class="split">
+    <div class="split scan-sticky-bar">
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
   <div id="scanProgressBox" class="scan-progress-box">
@@ -2125,7 +2140,7 @@ function isUserEditing() {
 
   const tag = el.tagName?.toLowerCase();
 
-  if (tag === "select" || tag === "textarea") return true;
+  if (tag === "textarea") return true;
 
   if (tag === "input" && el !== scanInput) return true;
 
@@ -2193,9 +2208,9 @@ document.addEventListener("keydown", async (e) => {
   windowSel.addEventListener("change", renderAll);
   activeSel.addEventListener("change", renderAll);
   btnSaveNames.addEventListener("click", saveNames);
-  workerFilter?.addEventListener("change", renderAll);
-  variedadFilter?.addEventListener("change", renderAll);
-  laminaFilter?.addEventListener("change", renderAll);
+  workerFilter?.addEventListener("change", () => { renderAll(); focusScanInput(); });
+  variedadFilter?.addEventListener("change", () => { renderAll(); focusScanInput(); });
+  laminaFilter?.addEventListener("change", () => { renderAll(); focusScanInput(); });
 
   let pollTimer = null;
 
@@ -2311,7 +2326,7 @@ if (msg.kind === "delete" && msg.id) {
     }
   }
 
-  const INTERACTIVE_SELECTOR = 'input, select, textarea, [contenteditable="true"], button:not(#btnFocus):not(#btnSerial)';
+  const INTERACTIVE_SELECTOR = 'input:not(#scanInput), textarea, [contenteditable="true"], button:not(#btnFocus):not(#btnSerial)';
   let suspendAutoFocus = false;
 
   function focusScanInput() {
@@ -2375,6 +2390,11 @@ if (msg.kind === "delete" && msg.id) {
   activeSel.addEventListener("mousedown", () => { suspendAutoFocus = true; });
   activeSel.addEventListener("change", () => { suspendAutoFocus = false; renderAll(); focusScanInput(); });
   activeSel.addEventListener("blur", () => { suspendAutoFocus = false; focusScanInput(); });
+
+  for (const sel of [workerFilter, variedadFilter, laminaFilter]) {
+    sel?.addEventListener("mousedown", () => { suspendAutoFocus = true; });
+    sel?.addEventListener("blur", () => { suspendAutoFocus = false; focusScanInput(); });
+  }
 
   namesBox.addEventListener("focusin", (e) => {
     if (e.target && e.target.matches('input[data-worker]')) suspendAutoFocus = true;
