@@ -338,6 +338,13 @@
 .btnDeleteScan:hover {
   opacity: .9;
 }
+
+.btnDeleteScan:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+  background: rgba(71,85,105,.65);
+  border-color: rgba(148,163,184,.35);
+}
   
   </style>
 </head>
@@ -540,6 +547,15 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
            style="padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(10,18,32,.25);white-space:pre-wrap">—</div>
 
       <button id="btnRefresh" class="ghost" type="button" style="margin-top:10px;">Refrescar</button>
+
+      <label style="margin-top:12px;">Ver registros por fecha</label>
+      <div class="row2">
+        <input id="historyDate" type="date" />
+        <button id="btnViewDate" class="ghost" type="button">Ver fecha</button>
+      </div>
+      <button id="btnTodayView" class="ghost" type="button" style="margin-top:8px;">Volver a hoy</button>
+      <div class="hint" id="historyModeText" style="margin-top:8px;">Vista actual: hoy, con captura activa.</div>
+
       <div class="hint" style="margin-top:8px;">Teclas: F9 activa captura.</div>
     </div>
   </div>
@@ -563,6 +579,10 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
   const lastScanEl = $("lastScan");
   const pendingBox = $("pendingBox");
   const btnRefresh = $("btnRefresh");
+  const historyDate = $("historyDate");
+  const btnViewDate = $("btnViewDate");
+  const btnTodayView = $("btnTodayView");
+  const historyModeText = $("historyModeText");
   const offlineStatus = $("offlineStatus");
   const laminaCards = $("laminaCards");
 
@@ -610,6 +630,7 @@ const lastLEl = $("lastLPending");
   let scans = [];
   let pendingAll = {};
   let es = null;
+  let selectedHistoryDate = "";
 
   let pendingWorker = null; // { raw, code, tallos }
   let pendingV = null;      // { raw, variedad, grado }
@@ -623,6 +644,42 @@ const lastLEl = $("lastLPending");
   ];
   const workerColors = {};
   workers.forEach((w, i) => workerColors[w] = palette[i % palette.length]);
+
+  function localDateKey(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function isHistoryMode() {
+    return !!selectedHistoryDate && selectedHistoryDate !== localDateKey();
+  }
+
+  function updateHistoryModeUI() {
+    const history = isHistoryMode();
+    const label = selectedHistoryDate || localDateKey();
+
+    if (historyDate) historyDate.value = label;
+    if (historyModeText) {
+      historyModeText.textContent = history
+        ? `Vista actual: ${label}. Solo lectura, captura pausada.`
+        : "Vista actual: hoy, con captura activa.";
+      historyModeText.className = "hint " + (history ? "warnTxt" : "okTxt");
+    }
+
+    if (manualScan) manualScan.disabled = history;
+    if (btnSerial) btnSerial.disabled = history;
+    if (btnFocus) btnFocus.disabled = history;
+
+    if (history) {
+      captureEnabled = false;
+      setCaptureUI();
+      setStatus(true, "Solo lectura", label);
+      try { es?.close(); } catch {}
+      es = null;
+    }
+  }
 
   const setStatus = (ok, text, m) => {
     dot.className = "dot " + (ok ? "ok" : "bad");
@@ -673,11 +730,18 @@ function hideOfflineStatusAfter(ms = 5000) {
 }
 
   function setCaptureUI() {
+    if (isHistoryMode()) {
+      capState.textContent = "SOLO LECTURA";
+      capState.className = "pill mono warnTxt";
+      return;
+    }
+
     capState.textContent = captureEnabled ? "CAPTURA: ACTIVA" : "CAPTURA: INACTIVA";
     capState.className = "pill mono " + (captureEnabled ? "okTxt" : "warnTxt");
   }
 
   function focusScan() {
+    if (isHistoryMode()) return;
     captureEnabled = true;
     setCaptureUI();
     scanInput.focus({preventScroll:true});
@@ -694,6 +758,8 @@ function hideOfflineStatusAfter(ms = 5000) {
   }
 
   function windowFilter(ts){
+    if (isHistoryMode()) return true;
+
     const now = new Date();
     const d = new Date(ts);
     if (isNaN(d)) return false;
@@ -1431,6 +1497,11 @@ function removeOfflineScan(idLocal) {
   async function deleteScan(id) {
   if (!id) return;
 
+  if (isHistoryMode()) {
+    lastScanEl.textContent = "Vista por fecha pasada: solo lectura";
+    return;
+  }
+
   const confirmar = confirm(`¿Eliminar el registro ID ${id}?`);
   if (!confirmar) return;
 
@@ -1464,6 +1535,7 @@ function removeOfflineScan(idLocal) {
   const workerSelected = (workerFilter?.value || "").trim().toUpperCase();
   const variedadSelected = (variedadFilter?.value || "").trim().toUpperCase();
   const laminaSelected = (laminaFilter?.value || "").trim().toUpperCase();
+  const history = isHistoryMode();
 
   const rows = getFilteredScans()
     .filter(r => {
@@ -1495,8 +1567,8 @@ function removeOfflineScan(idLocal) {
       <td>${r.grado_cm || ""}</td>
       <td><span class="pill mono">${r.lamina_nombre ?? r.lamina_id ?? "—"}</span></td>
       <td>
-        <button class="btnDeleteScan" data-id="${r.id}">
-          Eliminar
+        <button class="btnDeleteScan" data-id="${r.id}" ${history ? "disabled" : ""}>
+          ${history ? "Solo ver" : "Eliminar"}
         </button>
       </td>
     `;
@@ -1710,17 +1782,27 @@ function mergeScans(rows = []) {
 }
 
   async function refreshAll() {
+    const history = isHistoryMode();
+    const dateQuery = selectedHistoryDate || localDateKey();
+    const scansUrl = history
+      ? `${API}/api/scans?date=${encodeURIComponent(dateQuery)}&limit=30000`
+      : `${API}/api/scans?day=today&limit=30000`;
+
     const [pRes, sRes] = await Promise.all([
-      fetch(API + "/api/pendingAll", {cache:"no-store"}).catch(()=>null),
-      fetch(API + "/api/scans?day=today&limit=30000", {cache:"no-store"})
+      history ? Promise.resolve(null) : fetch(API + "/api/pendingAll", {cache:"no-store"}).catch(()=>null),
+      fetch(scansUrl, {cache:"no-store"})
     ]);
 
-    if (pRes && pRes.ok) pendingAll = await pRes.json();
+    if (history) pendingAll = {};
+    else if (pRes && pRes.ok) pendingAll = await pRes.json();
+
     if (sRes && sRes.ok) {
       const serverScans = await sRes.json();
-      mergeScans(serverScans);
+      if (history) scans = serverScans;
+      else mergeScans(serverScans);
       rememberCatalogNames(serverScans);
     }
+    updateHistoryModeUI();
     renderAll();
   }
 
@@ -2103,6 +2185,11 @@ async function syncOfflineScans() {
 }
 
   async function postScan(rawCode) {
+  if (isHistoryMode()) {
+    lastScanEl.textContent = "Vista por fecha pasada: solo lectura. Vuelve a hoy para escanear.";
+    return;
+  }
+
   const up = String(rawCode || "").trim().toUpperCase();
 
   // Código especial para cancelar el registro en construcción
@@ -2169,6 +2256,7 @@ function isUserEditing() {
 }
 
 document.addEventListener("keydown", async (e) => {
+  if (isHistoryMode()) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   if (isUserEditing()) return;
 
@@ -2226,6 +2314,36 @@ document.addEventListener("keydown", async (e) => {
   });
 
   btnRefresh.addEventListener("click", refreshAll);
+  btnViewDate?.addEventListener("click", async () => {
+    const value = historyDate?.value || "";
+    if (!value) return;
+
+    selectedHistoryDate = value;
+    scans = [];
+    pendingAll = {};
+    try { es?.close(); } catch {}
+    es = null;
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    await refreshAll();
+    if (!isHistoryMode()) {
+      startSSE();
+      focusScanInput();
+    }
+  });
+
+  btnTodayView?.addEventListener("click", async () => {
+    selectedHistoryDate = localDateKey();
+    scans = [];
+    pendingAll = {};
+    await refreshAll();
+    startSSE();
+    updateHistoryModeUI();
+    focusScanInput();
+  });
+
   windowSel.addEventListener("change", renderAll);
   activeSel.addEventListener("change", renderAll);
   btnSaveNames.addEventListener("click", saveNames);
@@ -2355,6 +2473,7 @@ if (msg.kind === "delete" && msg.id) {
   let suspendAutoFocus = false;
 
   function focusScanInput() {
+    if (isHistoryMode()) return;
     if (suspendAutoFocus) return;
     captureEnabled = true;
     setCaptureUI();
@@ -2510,6 +2629,11 @@ if (msg.kind === "delete" && msg.id) {
 
   async function connectSerial() {
     try {
+      if (isHistoryMode()) {
+        lastScanEl.textContent = "Vista por fecha pasada: solo lectura. Vuelve a hoy para usar serial.";
+        return;
+      }
+
       if (!("serial" in navigator)) {
         alert("Tu navegador no soporta Web Serial. Usa Chrome/Edge reciente o conecta como teclado.");
         setSerialState("NO SOPORTADO");
@@ -2554,6 +2678,8 @@ window.addEventListener("load", activarEscaneoInicial);
 window.addEventListener("pageshow", activarEscaneoInicial);
 
 (async () => {
+  selectedHistoryDate = localDateKey();
+  updateHistoryModeUI();
   activarEscaneoInicial();
 
   try {

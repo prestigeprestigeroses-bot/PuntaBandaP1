@@ -101,10 +101,19 @@ app.get("/api/scans", async (req, res) => {
 
     const limit = parseInt(req.query.limit, 10) || 200;
     const day = String(req.query.day || "").trim().toLowerCase();
+    const date = String(req.query.date || "").trim();
     const params = [];
     let whereSql = "";
 
-    if (day === "today") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [year, month, dayNum] = date.split("-").map(Number);
+      const start = new Date(year, month - 1, dayNum, 0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+
+      params.push(start, end);
+      whereSql = `WHERE s.ts >= $1 AND s.ts < $2`;
+    } else if (day === "today") {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
