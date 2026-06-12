@@ -546,8 +546,6 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
       <div class="hint mono" id="pendingBox"
            style="padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(10,18,32,.25);white-space:pre-wrap">—</div>
 
-      <button id="btnRefresh" class="ghost" type="button" style="margin-top:10px;">Refrescar</button>
-
       <label style="margin-top:12px;">Ver registros por fecha</label>
       <div class="row2">
         <input id="historyDate" type="date" />
@@ -558,6 +556,10 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
 
       <div class="hint" style="margin-top:8px;">Teclas: F9 activa captura.</div>
     </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin:18px 0 4px;">
+    <button id="btnRefresh" class="ghost" type="button" style="width:auto;padding:6px 10px;font-size:11px;">Refrescar</button>
   </div>
 </div>
 
@@ -1781,8 +1783,9 @@ function mergeScans(rows = []) {
   renderWorkerFilter();
 }
 
-  async function refreshAll() {
+  async function refreshAll(options = {}) {
     const history = isHistoryMode();
+    const replace = !!options.replace;
     const dateQuery = selectedHistoryDate || localDateKey();
     const scansUrl = history
       ? `${API}/api/scans?date=${encodeURIComponent(dateQuery)}&limit=30000`
@@ -1798,7 +1801,7 @@ function mergeScans(rows = []) {
 
     if (sRes && sRes.ok) {
       const serverScans = await sRes.json();
-      if (history) scans = serverScans;
+      if (history || replace) scans = serverScans;
       else mergeScans(serverScans);
       rememberCatalogNames(serverScans);
     }
@@ -2313,7 +2316,7 @@ document.addEventListener("keydown", async (e) => {
     await postScan(barcode);
   });
 
-  btnRefresh.addEventListener("click", refreshAll);
+  btnRefresh.addEventListener("click", () => refreshAll({ replace: true }));
   btnViewDate?.addEventListener("click", async () => {
     const value = historyDate?.value || "";
     if (!value) return;
@@ -2368,6 +2371,7 @@ document.addEventListener("keydown", async (e) => {
         clearInterval(pollTimer);
         pollTimer = null;
       }
+      startPollingFallback();
     };
 
     es.onmessage = (ev) => {
