@@ -2316,7 +2316,10 @@ document.addEventListener("keydown", async (e) => {
     await postScan(barcode);
   });
 
-  btnRefresh.addEventListener("click", () => refreshAll({ replace: true }));
+  btnRefresh.addEventListener("click", async () => {
+    await refreshAll({ replace: true });
+    lastScanEl.textContent = "Datos actualizados desde la base de datos";
+  });
   btnViewDate?.addEventListener("click", async () => {
     const value = historyDate?.value || "";
     if (!value) return;

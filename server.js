@@ -138,7 +138,7 @@ app.get("/api/scans", async (req, res) => {
         s.lamina_id,
         s.raw_a,
         s.raw_b,
-        COALESCE(v.nombre, s.variedad_id) AS variedad_nombre,
+        COALESCE(NULLIF(s.variedad_nombre, ''), v.nombre, s.variedad_id) AS variedad_nombre,
         COALESCE(s.lamina_nombre, l.nombre, s.lamina_id) AS lamina_nombre
       FROM scans s
       LEFT JOIN variedades v ON s.variedad_id = v.id
