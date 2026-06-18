@@ -239,6 +239,13 @@ function parseGrado(code) {
 // Lámina: L1, L2, L3...
 function parseLamina(code) {
   const up = String(code || "").trim().toUpperCase();
+  if (up === "PVC") {
+    return {
+      id: "PVC",
+      raw: "PVC",
+    };
+  }
+
   const m = up.match(/^L(\d{1,3})$/);
   if (!m) return null;
 
@@ -270,14 +277,24 @@ async function getVariedadById(variedadId) {
 }
 
 async function getLaminaActiva(laminaId) {
+  const id = String(laminaId || "").toUpperCase();
   const result = await pool.query(
-    `
-    SELECT id, nombre, activo
-    FROM lamina
-    WHERE UPPER(id) = $1
-    LIMIT 1
-    `,
-    [String(laminaId || "").toUpperCase()]
+    id === "PVC"
+      ? `
+        SELECT id, nombre, activo
+        FROM lamina
+        WHERE UPPER(id) = $1
+           OR UPPER(nombre) LIKE '%PVC%'
+        ORDER BY CASE WHEN UPPER(id) = $1 THEN 0 ELSE 1 END
+        LIMIT 1
+      `
+      : `
+        SELECT id, nombre, activo
+        FROM lamina
+        WHERE UPPER(id) = $1
+        LIMIT 1
+      `,
+    [id]
   );
 
   if (!result.rows[0]) return null;
@@ -502,6 +519,8 @@ app.post("/api/scan", async (req, res) => {
         error: `La lámina ${lObj.id} está inactiva`,
       });
     }
+
+    lObj.id = laminaDb.id || lObj.id;
 
     const workerName = workerNameMap[wObj.code] || wObj.code;
     const laminaNombre = laminaDb.nombre || lObj.id;
