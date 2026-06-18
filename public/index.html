@@ -351,7 +351,7 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(760px, calc(100vw - 36px));
+  width: min(660px, calc(100vw - 36px));
   z-index: 120;
   border: 2px solid rgba(34,197,94,.9);
   border-radius: 14px;
@@ -363,9 +363,9 @@
 }
 
 .x6Panel.hidden { display: none; }
-.x6Title { display:flex; justify-content:space-between; gap:10px; align-items:center; font-weight:950; font-size:19px; text-transform:uppercase; color:#fff; }
+.x6Title { display:flex; justify-content:space-between; gap:10px; align-items:center; font-weight:950; font-size:17px; text-transform:uppercase; color:#fff; }
 .x6Meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-.x6Meta .pill { width:100%; justify-content:center; font-size:15px; padding:9px 12px; background:rgba(15,118,110,.75); color:#fff; }
+.x6Meta .pill { width:100%; justify-content:center; font-size:14px; padding:8px 11px; background:rgba(15,118,110,.75); color:#fff; }
 .x6Ramos { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
 .x6Ramo {
   border:1px solid rgba(134,239,172,.65);
@@ -375,14 +375,14 @@
   font-weight:900;
   color:#cbd5e1;
   background:rgba(5,150,105,.78);
-  min-height: 56px;
+  min-height: 50px;
   display:grid;
-  grid-template-columns:60px 1fr 80px 80px 48px;
+  grid-template-columns:52px 1fr 70px 70px 44px;
   align-items:center;
   gap:10px;
 }
-.x6Ramo .x6RamoTitle { font-size:18px; color:#fff; }
-.x6Ramo .x6RamoLine { font-size:16px; color:#fff; }
+.x6Ramo .x6RamoTitle { font-size:17px; color:#fff; }
+.x6Ramo .x6RamoLine { font-size:15px; color:#fff; }
 .x6Ramo .x6RemoveOne {
   width:42px;
   padding:6px 0;
@@ -2020,6 +2020,28 @@ function displayVariedadScan() {
   return code;
 }
 
+function displayWorkerLabel(workerObj) {
+  if (!workerObj) return "";
+
+  const code = workerObj.code || workerObj.raw;
+  const raw = workerObj.raw || code;
+  const name = String(workerNameMap[code] || "").trim();
+
+  if (name && name !== code) return `${raw} - ${name}`;
+  return raw;
+}
+
+function displayVariedadLabel(variedadObj) {
+  if (!variedadObj) return "";
+
+  const code = variedadObj.variedad || variedadObj.raw;
+  const raw = variedadObj.raw || code;
+  const name = String(variedadNameMap[code] || "").trim();
+
+  if (name && name !== code) return `${raw} - ${name}`;
+  return raw;
+}
+
 function displayGradoScan() {
   if (!pendingG) return "";
   return `Grado ${pendingG.grado || pendingG.raw}`;
@@ -2045,6 +2067,7 @@ async function loadVariedadName(vObj) {
     if (res.ok && data?.nombre) {
       variedadNameMap[code] = data.nombre;
       updateScanProgressUI();
+      renderX6Panel();
     }
   } catch {}
 }
@@ -2070,8 +2093,8 @@ function renderX6Panel() {
   }
 
   x6Panel.classList.remove("hidden");
-  x6Worker.textContent = x6Batch.worker.raw;
-  x6Variety.textContent = x6Batch.ramos[x6Batch.current]?.variety?.raw || "Escanea variedad";
+  x6Worker.textContent = displayWorkerLabel(x6Batch.worker);
+  x6Variety.textContent = displayVariedadLabel(x6Batch.ramos[x6Batch.current]?.variety) || "Escanea variedad";
   const filledCount = x6Batch.ramos.filter(item => item.variety && !item.removed).length;
   x6Status.textContent = x6Batch.sending
     ? `Enviando ramo ${Math.min(x6Batch.current + 1, x6Batch.ramos.length)}`
@@ -2084,7 +2107,7 @@ function renderX6Panel() {
     if (item.sent) div.classList.add("sent");
     if (item.removed) div.classList.add("removed");
     if (!item.sent && !item.removed && item.index === x6Batch.current) div.classList.add("current");
-    const variety = item.variety?.raw || "ESCANEE VARIEDAD";
+    const variety = displayVariedadLabel(item.variety) || "ESCANEE VARIEDAD";
     div.innerHTML = `
       <div class="x6RamoTitle">#${item.index + 1}</div>
       <div class="x6RamoLine"><b>${escapeHtml(variety)}</b></div>
