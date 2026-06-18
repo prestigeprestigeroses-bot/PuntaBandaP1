@@ -348,9 +348,10 @@
 
 .x6Panel {
   position: fixed;
-  right: 18px;
-  bottom: 18px;
-  width: min(520px, calc(100vw - 36px));
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 36px));
   z-index: 120;
   border: 2px solid rgba(250,204,21,.8);
   border-radius: 14px;
@@ -373,7 +374,14 @@
   font-weight:900;
   color:#cbd5e1;
   background:rgba(15,23,42,.78);
+  min-height: 112px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
 }
+.x6Ramo .x6RamoTitle { font-size:15px; color:#fff; }
+.x6Ramo .x6RamoLine { font-size:11px; color:#cbd5e1; }
 .x6Ramo.current {
   color:#020617;
   background:#facc15;
@@ -610,7 +618,7 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
 
 <div id="x6Panel" class="x6Panel hidden">
   <div class="x6Title">
-    <span>Ficha x6 - 5 ramos automáticos</span>
+    <span>Ficha x6 - 5 ramos manuales</span>
     <span id="x6Status" class="pill mono">Esperando variedad</span>
   </div>
   <div class="x6Meta">
@@ -621,6 +629,7 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
   </div>
   <div id="x6Ramos" class="x6Ramos"></div>
   <div class="x6Actions">
+    <button id="btnX6Send" class="ghost" type="button">Enviar ramos</button>
     <button id="btnX6Remove" class="ghost" type="button">Quitar último ramo pendiente</button>
     <button id="btnX6Close" class="ghost" type="button">Cerrar cuadro</button>
   </div>
@@ -690,6 +699,7 @@ const lastLEl = $("lastLPending");
   const x6Worker = $("x6Worker");
   const x6Variety = $("x6Variety");
   const x6Ramos = $("x6Ramos");
+  const btnX6Send = $("btnX6Send");
   const btnX6Remove = $("btnX6Remove");
   const btnX6Close = $("btnX6Close");
 
@@ -2048,7 +2058,7 @@ function renderX6Panel() {
   x6Variety.textContent = x6Batch.variety?.raw || "Escanea variedad";
   x6Status.textContent = x6Batch.sending
     ? `Enviando ramo ${Math.min(x6Batch.current + 1, x6Batch.ramos.length)}`
-    : (x6Batch.variety ? "Envío automático en segundos" : "Esperando variedad");
+    : (x6Batch.variety ? "Listo para enviar" : "Esperando variedad");
 
   x6Ramos.innerHTML = "";
   for (const item of x6Batch.ramos) {
@@ -2057,7 +2067,13 @@ function renderX6Panel() {
     if (item.sent) div.classList.add("sent");
     if (item.removed) div.classList.add("removed");
     if (!item.sent && !item.removed && item.index === x6Batch.current) div.classList.add("current");
-    div.textContent = `Ramo ${item.index + 1}`;
+    const variety = item.variety?.raw || x6Batch.variety?.raw || "Sin variedad";
+    div.innerHTML = `
+      <div class="x6RamoTitle">Ramo ${item.index + 1}</div>
+      <div class="x6RamoLine">Variedad: <b>${escapeHtml(variety)}</b></div>
+      <div class="x6RamoLine">Grado: <b>40</b></div>
+      <div class="x6RamoLine">Lamina: <b>PVC</b></div>
+    `;
     x6Ramos.appendChild(div);
   }
 }
@@ -2070,13 +2086,16 @@ function openX6Batch(workerObj) {
     variety: x6LastVariety,
     current: 0,
     sending: false,
-    ramos: Array.from({ length: 5 }, (_, index) => ({ index, sent: false, removed: false }))
+    ramos: Array.from({ length: 5 }, (_, index) => ({
+      index,
+      sent: false,
+      removed: false,
+      variety: x6LastVariety
+    }))
   };
 
   lastScanEl.textContent = `${workerObj.raw} - ficha x6 abierta`;
   renderX6Panel();
-
-  if (x6Batch.variety) scheduleX6Send();
 }
 
 function closeX6Batch(message = "Ficha x6 cerrada") {
@@ -2092,20 +2111,12 @@ function setX6Variety(vObj) {
   if (!x6Batch) return false;
 
   x6Batch.variety = vObj;
+  for (const item of x6Batch.ramos) {
+    if (!item.sent && !item.removed) item.variety = vObj;
+  }
   lastScanEl.textContent = `Ficha x6 usa variedad ${vObj.raw}`;
   renderX6Panel();
-  scheduleX6Send();
   return true;
-}
-
-function scheduleX6Send(delayMs = 1800) {
-  if (!x6Batch || x6Batch.sending || !x6Batch.variety) return;
-  if (x6Batch.timer) clearTimeout(x6Batch.timer);
-  x6Batch.timer = setTimeout(() => {
-    if (x6Batch) x6Batch.timer = null;
-    sendX6Batch();
-  }, delayMs);
-  renderX6Panel();
 }
 
 function removeX6PendingRamo() {
@@ -2120,7 +2131,12 @@ function removeX6PendingRamo() {
 }
 
 async function sendX6Batch() {
-  if (!x6Batch || x6Batch.sending || !x6Batch.variety) return;
+  if (!x6Batch || x6Batch.sending) return;
+  if (!x6Batch.ramos.some(item => !item.sent && !item.removed && item.variety)) {
+    lastScanEl.textContent = "Ficha x6: escanea una variedad antes de enviar";
+    renderX6Panel();
+    return;
+  }
 
   if (x6Batch.timer) {
     clearTimeout(x6Batch.timer);
@@ -2139,7 +2155,7 @@ async function sendX6Batch() {
 
     const payload = {
       worker: x6Batch.worker.raw,
-      variedad: x6Batch.variety.raw,
+      variedad: item.variety.raw,
       grado: "G40",
       lamina: "PVC"
     };
@@ -2531,6 +2547,7 @@ document.addEventListener("keydown", async (e) => {
     lastScanEl.textContent = "Datos actualizados desde la base de datos";
   });
   btnX6Remove?.addEventListener("click", removeX6PendingRamo);
+  btnX6Send?.addEventListener("click", sendX6Batch);
   btnX6Close?.addEventListener("click", () => closeX6Batch());
   btnViewDate?.addEventListener("click", async () => {
     const value = historyDate?.value || "";
