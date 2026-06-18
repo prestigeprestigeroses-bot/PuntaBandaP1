@@ -2155,8 +2155,8 @@ function setX6Variety(vObj) {
 
   if (!x6Batch) return false;
 
-  const target = x6Batch.ramos.find(item => !item.sent && !item.removed && !item.variety)
-    || x6Batch.ramos.find(item => !item.sent && !item.removed && item.index >= x6Batch.current)
+  const target = x6Batch.ramos.find(item => !item.sent && !item.removed && item.index === x6Batch.current)
+    || x6Batch.ramos.find(item => !item.sent && !item.removed && item.index > x6Batch.current)
     || x6Batch.ramos.find(item => !item.sent && !item.removed);
 
   if (!target) {
@@ -2165,11 +2165,16 @@ function setX6Variety(vObj) {
     return true;
   }
 
-  target.variety = vObj;
+  for (const item of x6Batch.ramos) {
+    if (!item.sent && !item.removed && item.index >= target.index) {
+      item.variety = vObj;
+    }
+  }
+
   x6Batch.variety = vObj;
-  const next = x6Batch.ramos.find(item => !item.sent && !item.removed && !item.variety);
+  const next = x6Batch.ramos.find(item => !item.sent && !item.removed && item.index > target.index);
   x6Batch.current = next ? next.index : target.index;
-  lastScanEl.textContent = `Ficha x6: ramo ${target.index + 1} usa ${vObj.raw}`;
+  lastScanEl.textContent = `Ficha x6: desde ramo ${target.index + 1} usa ${vObj.raw}`;
   renderX6Panel();
   return true;
 }
@@ -2199,7 +2204,7 @@ function addX6Ramo() {
     index: nextIndex,
     sent: false,
     removed: false,
-    variety: null
+    variety: x6Batch.variety
   });
   x6Batch.current = nextIndex;
   lastScanEl.textContent = `Ficha x6: ramo ${nextIndex + 1} agregado, escanee variedad`;
