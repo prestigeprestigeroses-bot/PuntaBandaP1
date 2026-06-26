@@ -1979,12 +1979,43 @@ function parseG(code) {
 
   function parseL(code) {
     const up = String(code||"").trim().toUpperCase();
+    if (up === "PVC") return { raw: "PVC", id: "PVC" };
     const m = up.match(/^L(\d{1,3})$/);
     if (!m) return null;
     const n = parseInt(m[1],10);
     if (!Number.isFinite(n) || n <= 0) return null;
     return { raw: up, id: "L" + n };
   }
+
+  function parseFullScanCode(code) {
+  const up = String(code || "").trim().toUpperCase();
+  const parts = up.split("-");
+  if (parts.length !== 5) return null;
+
+  const [workerCode, tallosCode, gradoCode, laminaCode, variedadCode] = parts;
+  if (!/^T\d{1,3}$/.test(tallosCode)) return null;
+
+  const b = parseBonchador(`${workerCode}-${tallosCode}`);
+  const g = parseG(gradoCode);
+  const l = parseL(laminaCode);
+  const v = parseV(variedadCode);
+
+  if (!(b && g && l && v)) return null;
+
+  return {
+    raw: up,
+    b,
+    v,
+    g,
+    l,
+    payload: {
+      worker: b.raw,
+      variedad: v.raw,
+      grado: g.raw,
+      lamina: l.raw
+    }
+  };
+}
 
   function detectBarcodeType(code) {
   const up = String(code || "").trim().toUpperCase();
@@ -2504,6 +2535,56 @@ async function sendX6Batch() {
 });
 }
 
+async function sendFullScanCode(full) {
+  const payload = full.payload;
+  const comboText = `${payload.worker} / ${payload.variedad} / ${payload.grado} / ${payload.lamina}`;
+
+  if (x6Batch) {
+    if (x6Batch.timer) clearTimeout(x6Batch.timer);
+    x6Batch = null;
+    renderX6Panel();
+  }
+
+  pendingWorker = null;
+  pendingV = null;
+  pendingG = null;
+  pendingL = null;
+  setLastWorkerUI(null);
+  setLastVUI(null);
+  setLastGUI(null);
+  setLastLUI(null);
+  updateScanProgressUI();
+
+  loadVariedadName(full.v);
+  loadLaminaName(full.l);
+
+  lastScanEl.textContent = `${comboText} (enviando...)`;
+  const out = await sendToServer(payload);
+
+  if (!out.ok) {
+    const msg = out.data?.error || "ERROR";
+    lastScanEl.textContent = `${comboText} (${msg})`;
+    return;
+  }
+
+  if (out.offline) {
+    lastScanEl.textContent = `${comboText} (SIN INTERNET, guardado offline)`;
+    const pendientes = getOfflineQueue().length;
+    showOfflineStatus(`SIN INTERNET - ${pendientes} registro(s) offline pendiente(s)`, "warn");
+    if (typeof playOkSound === "function") playOkSound();
+    return;
+  }
+
+  if (out.data?.reg) {
+    addScanIfNotExists(out.data.reg);
+    lastScanEl.textContent = `${comboText} (registrado)`;
+    renderAll();
+    if (typeof playOkSound === "function") playOkSound();
+  } else {
+    await refreshAll();
+  }
+}
+
 async function syncOfflineScans() {
   const queue = getOfflineQueue();
   if (!queue.length) return;
@@ -2540,6 +2621,13 @@ async function syncOfflineScans() {
   // Código especial para cancelar el registro en construcción
   if (up === "E123") {
     limpiarEscaneoPendiente("E123 → REGISTRO EN CONSTRUCCIÓN BORRADO");
+    return;
+  }
+
+  const fullScan = parseFullScanCode(up);
+  if (fullScan) {
+    lastScanEl.textContent = up;
+    await sendFullScanCode(fullScan);
     return;
   }
 
