@@ -1999,9 +1999,13 @@ function parseG(code) {
   const up = String(code || "").trim().toUpperCase();
   const parts = up.split("-");
 
-  // La etiqueta puede terminar en S<semana>-<dia>. Es información de
-  // impresión: se reconoce para permitir el escaneo, pero no se registra.
-  if (parts.length >= 7) {
+  // La etiqueta puede terminar en S<semana><dia>, por ejemplo S266.
+  // Es información de impresión: se permite, pero no se registra.
+  const semanaDiaCompacto = parts[parts.length - 1];
+  if (/^S\d{1,2}[1-7]$/.test(semanaDiaCompacto)) {
+    parts.pop();
+  } else if (parts.length >= 7) {
+    // Conserva compatibilidad con etiquetas anteriores: S26-6.
     const semanaCode = parts[parts.length - 2];
     const diaCode = parts[parts.length - 1];
     if (/^S\d{1,2}$/.test(semanaCode) && /^[1-7]$/.test(diaCode)) {
