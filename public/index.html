@@ -1998,6 +1998,17 @@ function parseG(code) {
   function parseFullScanCode(code) {
   const up = String(code || "").trim().toUpperCase();
   const parts = up.split("-");
+
+  // La etiqueta puede terminar en S<semana>-<dia>. Es información de
+  // impresión: se reconoce para permitir el escaneo, pero no se registra.
+  if (parts.length >= 7) {
+    const semanaCode = parts[parts.length - 2];
+    const diaCode = parts[parts.length - 1];
+    if (/^S\d{1,2}$/.test(semanaCode) && /^[1-7]$/.test(diaCode)) {
+      parts.splice(-2, 2);
+    }
+  }
+
   if (parts.length !== 5 && parts.length !== 6) return null;
 
   const [workerCode, tallosCode, gradoCode, laminaCode, variedadCode, fincaCode] = parts;
