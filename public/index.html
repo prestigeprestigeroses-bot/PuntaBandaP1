@@ -118,6 +118,18 @@
     .subRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     .subPill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid rgba(31,51,88,.7);background:rgba(10,18,32,.25);font-size:12px;color:rgba(200,220,255,.95)}
     .subPill b{color:#fff}
+    .stemTypeBlock{margin-top:10px;padding-top:8px;border-top:1px dashed rgba(31,51,88,.6)}
+    .stemTypeRow{gap:7px;margin-top:6px}
+    .stemTypePill{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      border-color:var(--worker-color, rgba(96,165,250,.65));
+      box-shadow:inset 3px 0 0 var(--worker-color, #60a5fa);
+      font-size:13px;
+    }
+    .stemTypePill b{font-size:14px;color:var(--worker-color, #93c5fd)}
+    .stemTypePill strong{font-size:15px;color:#fff}
     .pill {
   background: rgba(34,197,94,.2);
   border: 1px solid #22c55e;
@@ -1407,10 +1419,15 @@ function removeOfflineScan(idLocal) {
       const grado = (r.grado_cm != null) ? String(r.grado_cm) : "—";
       const tallos = Number(r.tallos) || 0;
 
-      if (!byW[w]) byW[w] = { totalRamos: 0, totalTallos: 0, variedades: {} };
+      if (!byW[w]) byW[w] = { totalRamos: 0, totalTallos: 0, variedades: {}, porTallos: {} };
       const itW = byW[w];
       itW.totalRamos += 1;
       itW.totalTallos += tallos;
+
+      if (tallos > 0) {
+        const tallosKey = String(tallos);
+        itW.porTallos[tallosKey] = (itW.porTallos[tallosKey] || 0) + 1;
+      }
 
       const key = varNombre;
       if (!itW.variedades[key]) itW.variedades[key] = { nombre: varNombre, ramos: 0, tallos: 0, grados: {} };
@@ -1444,8 +1461,11 @@ function removeOfflineScan(idLocal) {
       const rph = hrs > 0 ? (ramos / hrs) : 0;
       const tph = hrs > 0 ? (tallos / hrs) : 0;
 
-      const wData = byW[w] || { totalRamos: 0, totalTallos: 0, variedades: {} };
+      const wData = byW[w] || { totalRamos: 0, totalTallos: 0, variedades: {}, porTallos: {} };
       const varArr = sortVarieties(wData.variedades, "ramos");
+      const tallosArr = Object.entries(wData.porTallos || {})
+        .map(([cantidad, cantidadRamos]) => ({ cantidad: Number(cantidad), cantidadRamos }))
+        .sort((a, b) => a.cantidad - b.cantidad);
 
       const topN = 3;
       const top = varArr.slice(0, topN);
@@ -1462,6 +1482,19 @@ function removeOfflineScan(idLocal) {
       };
 
       const detailsId = `detail-${w}`;
+      const tallosHtml = tallosArr.length ? `
+        <div class="stemTypeBlock">
+          <div class="hint">Ramos por tallos</div>
+          <div class="subRow stemTypeRow">
+            ${tallosArr.map(item => `
+              <span class="subPill stemTypePill" style="--worker-color:${workerColors[w] || "#93C5FD"}">
+                <b>X${item.cantidad}</b><strong>${item.cantidadRamos}</strong> ramos
+              </span>
+            `).join("")}
+          </div>
+        </div>
+      ` : "";
+
       const detailHtml = varArr.length ? `
         <div style="margin-top:10px;border-top:1px dashed rgba(31,51,88,.6);padding-top:8px;">
           <div class="hint" style="margin-bottom:6px;">Detalle por variedad</div>
@@ -1504,6 +1537,7 @@ function removeOfflineScan(idLocal) {
           <span class="subPill"><b>${tph.toFixed(1)}</b> tallos/h</span>
         </div>
 
+        ${tallosHtml}
         ${detailHtml}
       `;
       workerCards.appendChild(div);
