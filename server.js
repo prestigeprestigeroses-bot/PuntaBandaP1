@@ -361,7 +361,9 @@ async function ensureScansNameColumns() {
     ALTER TABLE public.scans
     ADD COLUMN IF NOT EXISTS worker_name character varying(120),
     ADD COLUMN IF NOT EXISTS lamina_nombre character varying(120),
-    ADD COLUMN IF NOT EXISTS finca character varying(10)
+    ADD COLUMN IF NOT EXISTS finca character varying(10),
+    ALTER COLUMN variedad_id DROP NOT NULL,
+    ALTER COLUMN variedad_nombre DROP NOT NULL
   `);
 
   await pool.query(`
@@ -441,11 +443,11 @@ async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, lami
       wObj.code,           // B01
       workerName,
       wObj.tallos,         // 20
-      vObj.variedad_id,    // V01
+      vObj?.variedad_id || null, // V01 o vacía para QR sin variedad
       variedadNombre,
       gObj.grado_cm,       // 60
       wObj.raw,            // B01-T20
-      `${vObj.raw}-${gObj.raw}`, // V01-G60
+      vObj ? `${vObj.raw}-${gObj.raw}` : gObj.raw,
       lObj.id,             // L1
       laminaNombre,
       finca
@@ -471,12 +473,14 @@ async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, lami
 
 app.post("/api/scan", async (req, res) => {
   try {
-    const { worker, variedad, grado, lamina, finca } = req.body || {};
+    const { worker, variedad, grado, lamina, finca, qrSinVariedad } = req.body || {};
 
     const wObj = parseWorker(worker);
     const vObj = parseVariedad(variedad);
     const gObj = parseGrado(grado);
     const lObj = parseLamina(lamina);
+    const variedadIngresada = String(variedad || "").trim();
+    const permiteVariedadVacia = qrSinVariedad === true && !variedadIngresada;
 
     if (!wObj) {
       return res.status(400).json({
@@ -484,7 +488,7 @@ app.post("/api/scan", async (req, res) => {
       });
     }
 
-    if (!vObj) {
+    if (!vObj && !permiteVariedadVacia) {
       return res.status(400).json({
         error: "Variedad inválida. Formato esperado: V01",
       });
@@ -502,9 +506,9 @@ app.post("/api/scan", async (req, res) => {
       });
     }
 
-    const variedadDb = await getVariedadById(vObj.variedad_id);
+    const variedadDb = vObj ? await getVariedadById(vObj.variedad_id) : null;
 
-    if (!variedadDb) {
+    if (vObj && !variedadDb) {
       return res.status(400).json({
         error: `La variedad ${vObj.variedad_id} no existe en la tabla variedades`,
       });
@@ -538,7 +542,7 @@ app.post("/api/scan", async (req, res) => {
       vObj,
       gObj,
       lObj,
-      variedadDb.nombre,
+      variedadDb?.nombre || null,
       workerName,
       laminaNombre,
       fincaValue
@@ -546,7 +550,7 @@ app.post("/api/scan", async (req, res) => {
 
     const broadcastData = {
       ...savedReg,
-      variedad_nombre: variedadDb.nombre || vObj.variedad_id,
+      variedad_nombre: variedadDb?.nombre || vObj?.variedad_id || null,
       worker_name: savedReg.worker_name || workerName,
       lamina_nombre: savedReg.lamina_nombre || laminaNombre,
       finca: savedReg.finca || fincaValue,
