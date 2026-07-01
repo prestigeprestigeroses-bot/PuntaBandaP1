@@ -1444,13 +1444,14 @@ function removeOfflineScan(idLocal) {
       const itW = byW[w];
       itW.totalRamos += 1;
       itW.totalTallos += tallos;
+      const esNacional = grado.trim().toUpperCase() === "NACIONAL";
 
-      if (grado.trim().toUpperCase() === "NACIONAL") {
+      if (esNacional) {
         itW.nacional.ramos += 1;
         itW.nacional.tallos += tallos;
       }
 
-      if (tallos > 0) {
+      if (!esNacional && tallos > 0) {
         const tallosKey = String(tallos);
         itW.porTallos[tallosKey] = (itW.porTallos[tallosKey] || 0) + 1;
       }
