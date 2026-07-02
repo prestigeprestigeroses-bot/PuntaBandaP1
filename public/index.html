@@ -1999,7 +1999,7 @@ function mergeScans(rows = []) {
   const n = parseInt(m[1], 10);
   const t = parseInt(m[2], 10);
 
-  if (n < 1 || n > 12) return null;
+  if (n < 1 || n > 13) return null;
   if (!Number.isFinite(t) || t <= 0) return null;
 
   const codeFixed = `B${String(n).padStart(2, "0")}`;
