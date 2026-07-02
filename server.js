@@ -42,7 +42,7 @@ const pool = new Pool({
 // Configuración y estado
 // -----------------------------
 const WORKER_MIN = 1;
-const WORKER_MAX = 12;
+const WORKER_MAX = 13;
 
 // Mapa en memoria de nombres de bonchadores (p.ej. { B16: "Juan" })
 let workerNameMap = {};
@@ -185,7 +185,7 @@ function parseWorker(code) {
   if (!Number.isFinite(tallos) || tallos <= 0) return null;
 
   return {
-    code: `B${String(n).padStart(2, "0")}`, // B01, B02... B12
+    code: `B${String(n).padStart(2, "0")}`, // B01, B02... B13
     tallos,
     raw: up,
   };
