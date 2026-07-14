@@ -346,6 +346,11 @@
     table{width:100%;border-collapse:collapse;font-size:12px}
     thead th{position:sticky;top:0;background:rgba(15,27,47,.95);color:var(--muted);text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
     tbody td{padding:10px 8px;border-bottom:1px solid rgba(31,51,88,.6);vertical-align:top}
+    tbody tr.offline-row td{
+      background:rgba(245,158,11,.12);
+      border-bottom-color:rgba(245,158,11,.35);
+      box-shadow:inset 3px 0 0 rgba(245,158,11,.9);
+    }
     .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     .legItem{display:flex;gap:8px;align-items:center;border:1px solid rgba(31,51,88,.7);border-radius:999px;padding:6px 10px;background:rgba(10,18,32,.25)}
@@ -831,7 +836,7 @@ const lastLEl = $("lastLPending");
     }[ch]));
   }
 
-  function showOfflineStatus(text, type = "warn") {
+function showOfflineStatus(text, type = "warn") {
   if (!offlineStatus) return;
 
   offlineStatus.style.display = "inline-block";
@@ -851,6 +856,20 @@ const lastLEl = $("lastLPending");
     offlineStatus.style.borderColor = "rgba(245,158,11,.65)";
     offlineStatus.style.color = "#fde68a";
     offlineStatus.style.background = "rgba(245,158,11,.14)";
+  }
+}
+
+function updateOfflineStatusFromQueue() {
+  const pendientes = getOfflineQueue().length;
+
+  if (pendientes > 0) {
+    const prefix = navigator.onLine ? "CONEXION LIMITADA" : "SIN INTERNET";
+    showOfflineStatus(`${prefix} - ${pendientes} registro(s) en cola`, "warn");
+    return;
+  }
+
+  if (!navigator.onLine) {
+    showOfflineStatus("SIN INTERNET - los escaneos se guardaran en cola", "bad");
   }
 }
 
@@ -941,20 +960,58 @@ function hideOfflineStatusAfter(ms = 5000) {
 
 function saveOfflineScan(payload) {
   const queue = getOfflineQueue();
-
-  queue.push({
+  const item = {
     idLocal: crypto.randomUUID(),
     fechaLocal: new Date().toISOString(),
     payload,
     sincronizado: false
-  });
+  };
+
+  queue.push(item);
 
   localStorage.setItem("offlineScans", JSON.stringify(queue));
+  addOfflineScanToView(item);
+  updateOfflineStatusFromQueue();
+  return item;
 }
 
 function removeOfflineScan(idLocal) {
   const queue = getOfflineQueue().filter(x => x.idLocal !== idLocal);
   localStorage.setItem("offlineScans", JSON.stringify(queue));
+  scans = scans.filter(r => String(r.id) !== `offline-${idLocal}`);
+  updateOfflineStatusFromQueue();
+}
+
+function addOfflineQueueToView() {
+  for (const item of getOfflineQueue()) addOfflineScanToView(item);
+}
+
+function addOfflineScanToView(item) {
+  if (!item?.idLocal || !item?.payload) return;
+
+  const payload = item.payload;
+  const workerObj = parseBonchador(payload.worker);
+  const variedadObj = parseV(payload.variedad);
+  const gradoObj = parseG(payload.grado);
+  const laminaObj = parseL(payload.lamina);
+  const fincaObj = parseFinca(payload.finca);
+  const worker = workerObj?.code || String(payload.worker || "").split("-")[0].trim().toUpperCase();
+  const localId = `offline-${item.idLocal}`;
+
+  addScanIfNotExists({
+    id: localId,
+    ts: item.fechaLocal || new Date().toISOString(),
+    worker,
+    worker_name: workerNameMap[worker] || worker,
+    tallos: workerObj?.tallos ?? null,
+    variedad_id: variedadObj?.variedad || null,
+    variedad_nombre: variedadObj ? (variedadNameMap[variedadObj.variedad] || variedadObj.variedad) : null,
+    grado_cm: gradoObj?.grado || String(payload.grado || "").trim().toUpperCase(),
+    lamina_id: laminaObj?.id || null,
+    lamina_nombre: laminaObj ? (laminaNameMap[laminaObj.id] || laminaObj.id) : null,
+    finca: fincaObj?.finca || null,
+    offline_pending: true
+  });
 }
 
   function stemsByWorkerFiltered() {
@@ -1739,8 +1796,10 @@ function removeOfflineScan(idLocal) {
 
   for (const r of rows) {
     const name = r.worker_name || workerNameMap[String(r.worker || "").trim()] || "";
+    const pending = !!r.offline_pending;
 
     const tr = document.createElement("tr");
+    if (pending) tr.classList.add("offline-row");
     tr.innerHTML = `
       <td class="mono">${fmtTime(r.ts)}</td>
       <td><span class="pill">${r.worker || ""}</span></td>
@@ -1751,8 +1810,8 @@ function removeOfflineScan(idLocal) {
       <td><span class="pill mono">${r.lamina_nombre ?? r.lamina_id ?? "—"}</span></td>
       <td>${r.finca ? `<span class="pill mono">${escapeHtml(r.finca)}</span>` : ""}</td>
       <td>
-        <button class="btnDeleteScan" data-id="${r.id}" ${history ? "disabled" : ""}>
-          ${history ? "Solo ver" : "Eliminar"}
+        <button class="btnDeleteScan" data-id="${r.id}" ${(history || pending) ? "disabled" : ""}>
+          ${pending ? "En cola" : (history ? "Solo ver" : "Eliminar")}
         </button>
       </td>
     `;
@@ -1975,7 +2034,7 @@ function mergeScans(rows = []) {
 
     const [pRes, sRes] = await Promise.all([
       history ? Promise.resolve(null) : fetch(API + "/api/pendingAll", {cache:"no-store"}).catch(()=>null),
-      fetch(scansUrl, {cache:"no-store"})
+      fetch(scansUrl, {cache:"no-store"}).catch(()=>null)
     ]);
 
     if (history) pendingAll = {};
@@ -1987,6 +2046,8 @@ function mergeScans(rows = []) {
       else mergeScans(serverScans);
       rememberCatalogNames(serverScans);
     }
+    if (!history) addOfflineQueueToView();
+    updateOfflineStatusFromQueue();
     updateHistoryModeUI();
     renderAll();
   }
@@ -2443,6 +2504,11 @@ async function sendX6Batch() {
     }
 
     item.sent = true;
+    if (out.offline) {
+      const pendientes = getOfflineQueue().length;
+      showOfflineStatus(`CONEXION LIMITADA - ${pendientes} registro(s) en cola`, "warn");
+      renderAll();
+    }
     if (out.data?.reg) {
       addScanIfNotExists(out.data.reg);
       renderFast();
@@ -2546,6 +2612,18 @@ async function sendX6Batch() {
       data = await res.json(); 
     } catch {}
 
+    if (!res.ok && res.status >= 500) {
+      saveOfflineScan(payload);
+      return {
+        ok: true,
+        offline: true,
+        data: {
+          ok: true,
+          mensaje: "Guardado en cola por conexion limitada"
+        }
+      };
+    }
+
     return { ok: res.ok, data, offline: false };
 
   } catch (err) {
@@ -2626,7 +2704,8 @@ async function sendX6Batch() {
   lastScanEl.textContent = `${comboText} (SIN INTERNET, guardado offline)`;
 
   const pendientes = getOfflineQueue().length;
-  showOfflineStatus(`SIN INTERNET · ${pendientes} registro(s) offline pendiente(s)`, "warn");
+  showOfflineStatus(`CONEXION LIMITADA - ${pendientes} registro(s) en cola`, "warn");
+  renderAll();
 
   if (typeof playOkSound === "function") {
     playOkSound();
@@ -2687,7 +2766,8 @@ async function sendFullScanCode(full) {
   if (out.offline) {
     lastScanEl.textContent = `${comboText} (SIN INTERNET, guardado offline)`;
     const pendientes = getOfflineQueue().length;
-    showOfflineStatus(`SIN INTERNET - ${pendientes} registro(s) offline pendiente(s)`, "warn");
+    showOfflineStatus(`CONEXION LIMITADA - ${pendientes} registro(s) en cola`, "warn");
+    renderAll();
     if (typeof playOkSound === "function") playOkSound();
     return;
   }
@@ -2718,8 +2798,13 @@ async function syncOfflineScans() {
 
       if (res.ok && data.ok) {
         removeOfflineScan(item.idLocal);
+        if (data.reg) addScanIfNotExists(data.reg);
+      } else if (res.status >= 500) {
+        showOfflineStatus("Base de datos limitada - la cola sigue pendiente", "warn");
+        return;
       }
     } catch {
+      updateOfflineStatusFromQueue();
       return;
     }
   }
@@ -3269,6 +3354,8 @@ window.addEventListener("pageshow", activarEscaneoInicial);
     }
 
     setupHiDPICanvas();
+    addOfflineQueueToView();
+    updateOfflineStatusFromQueue();
     renderAll();
     installResizeObservers();
     updateScanProgressUI();
@@ -3279,32 +3366,36 @@ window.addEventListener("pageshow", activarEscaneoInicial);
   const pendientes = getOfflineQueue().length;
   if (pendientes <= 0) return;
 
-  showOfflineStatus(`Sincronizando ${pendientes} registro(s) offline...`, "ok");
+  showOfflineStatus(`Sincronizando ${pendientes} registro(s) en cola...`, "ok");
 
   await syncOfflineScans();
 
   const restantes = getOfflineQueue().length;
 
   if (restantes > 0) {
-    showOfflineStatus(`${restantes} registro(s) offline siguen pendientes`, "warn");
+    showOfflineStatus(`${restantes} registro(s) en cola siguen pendientes`, "warn");
   } else {
-    showOfflineStatus("Pendientes offline sincronizados", "ok");
+    showOfflineStatus("Cola sincronizada", "ok");
     hideOfflineStatusAfter(5000);
   }
 }, 10000);
 window.addEventListener("online", async () => {
-  showOfflineStatus("Internet recuperado · sincronizando pendientes...", "ok");
+  showOfflineStatus("Internet recuperado - sincronizando cola...", "ok");
 
   await syncOfflineScans();
 
   const pendientes = getOfflineQueue().length;
 
   if (pendientes > 0) {
-    showOfflineStatus(`${pendientes} registro(s) offline siguen pendientes`, "warn");
+    showOfflineStatus(`${pendientes} registro(s) en cola siguen pendientes`, "warn");
   } else {
-    showOfflineStatus("Sincronización offline finalizada", "ok");
+    showOfflineStatus("Sincronizacion de cola finalizada", "ok");
     hideOfflineStatusAfter(5000);
   }
+});
+
+window.addEventListener("offline", () => {
+  updateOfflineStatusFromQueue();
 });
 
   })();
