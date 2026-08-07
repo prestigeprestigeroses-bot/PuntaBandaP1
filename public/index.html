@@ -1504,6 +1504,7 @@ function addOfflineScanToView(item) {
 
       const varNombre = r.variedad_nombre || r.variedad_id || "—";
       const grado = (r.grado_cm != null) ? String(r.grado_cm) : "—";
+      const lamina = String(r.lamina_nombre || r.lamina_id || "").trim().toUpperCase();
       const tallos = Number(r.tallos) || 0;
 
       if (!byW[w]) byW[w] = {
@@ -1519,7 +1520,7 @@ function addOfflineScanToView(item) {
       itW.totalTallos += tallos;
       const gradoNormalizado = grado.trim().toUpperCase();
       const esNacional = gradoNormalizado === "NACIONAL";
-      const esBajas = gradoNormalizado === "BAJAS";
+      const esBajas = lamina === "BAJAS" || lamina.includes("BAJA");
 
       if (esNacional) {
         itW.nacional.ramos += 1;
@@ -1619,7 +1620,7 @@ function addOfflineScanToView(item) {
 
       const bajasHtml = wData.bajas.ramos > 0 ? `
         <div class="bajasSummary">
-          <b>GRADO BAJAS</b>
+          <b>LAMINA BAJAS</b>
           <span><strong>${wData.bajas.ramos}</strong> ramos</span>
           <span><strong>${wData.bajas.tallos}</strong> tallos</span>
         </div>
@@ -2137,7 +2138,7 @@ function parseG(code) {
   }
 
   // Grados de texto permitidos
-  const textosPermitidos = ["NACIONAL", "BAJAS"];
+  const textosPermitidos = ["NACIONAL"];
 
   if (textosPermitidos.includes(up)) {
     return {
@@ -2152,6 +2153,7 @@ function parseG(code) {
   function parseL(code) {
     const up = String(code||"").trim().toUpperCase();
     if (up === "PVC") return { raw: "PVC", id: "PVC" };
+    if (up === "BAJAS" || up === "BAJA") return { raw: "BAJAS", id: "BAJAS" };
     const m = up.match(/^L(\d{1,3})$/);
     if (!m) return null;
     const n = parseInt(m[1],10);

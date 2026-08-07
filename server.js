@@ -225,7 +225,7 @@ function parseGrado(code) {
   }
 
   // Grados de texto permitidos
-  const textosPermitidos = ["NACIONAL", "BAJAS"];
+  const textosPermitidos = ["NACIONAL"];
 
   if (textosPermitidos.includes(up)) {
     return {
@@ -244,6 +244,12 @@ function parseLamina(code) {
     return {
       id: "PVC",
       raw: "PVC",
+    };
+  }
+  if (up === "BAJAS" || up === "BAJA") {
+    return {
+      id: "BAJAS",
+      raw: "BAJAS",
     };
   }
 
@@ -496,13 +502,13 @@ app.post("/api/scan", async (req, res) => {
 
     if (!gObj) {
       return res.status(400).json({
-        error: "Grado inválido. Formato esperado: G60, 60, NACIONAL o BAJAS",
+        error: "Grado inválido. Formato esperado: G60, 60 o NACIONAL",
       });
     }
 
     if (!lObj) {
       return res.status(400).json({
-        error: "Lámina inválida. Formato esperado: L1, L2, L3...",
+        error: "Lámina inválida. Formato esperado: L1, L2, L3, PVC o BAJAS",
       });
     }
 
