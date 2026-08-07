@@ -1630,13 +1630,13 @@ function isBajasLaminaRecord(r) {
         </div>
       ` : "";
 
-      const bajasHtml = wData.bajas.ramos > 0 ? `
+      const bajasHtml = `
         <div class="bajasSummary">
           <b>LAMINA BAJAS</b>
           <span><strong>${wData.bajas.ramos}</strong> ramos</span>
           <span><strong>${wData.bajas.tallos}</strong> tallos</span>
         </div>
-      ` : "";
+      `;
 
       const detailHtml = varArr.length ? `
         <div style="margin-top:10px;border-top:1px dashed rgba(31,51,88,.6);padding-top:8px;">
