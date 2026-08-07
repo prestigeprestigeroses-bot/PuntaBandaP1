@@ -1029,6 +1029,19 @@ function addOfflineScanToView(item) {
   });
 }
 
+function normalizePlainText(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isBajasLaminaRecord(r) {
+  const laminaText = normalizePlainText(`${r?.lamina_id || ""} ${r?.lamina_nombre || ""}`);
+  return /\bBAJAS?\b/.test(laminaText) || laminaText.includes("LAMINA BAJA");
+}
+
   function stemsByWorkerFiltered() {
   const stems = Object.fromEntries(workers.map(w => [w, 0]));
   for (const r of getFilteredScans()) {
@@ -1504,7 +1517,6 @@ function addOfflineScanToView(item) {
 
       const varNombre = r.variedad_nombre || r.variedad_id || "—";
       const grado = (r.grado_cm != null) ? String(r.grado_cm) : "—";
-      const lamina = String(r.lamina_nombre || r.lamina_id || "").trim().toUpperCase();
       const tallos = Number(r.tallos) || 0;
 
       if (!byW[w]) byW[w] = {
@@ -1520,7 +1532,7 @@ function addOfflineScanToView(item) {
       itW.totalTallos += tallos;
       const gradoNormalizado = grado.trim().toUpperCase();
       const esNacional = gradoNormalizado === "NACIONAL";
-      const esBajas = lamina === "BAJAS" || lamina.includes("BAJA");
+      const esBajas = isBajasLaminaRecord(r);
 
       if (esNacional) {
         itW.nacional.ramos += 1;

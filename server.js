@@ -285,13 +285,14 @@ async function getVariedadById(variedadId) {
 
 async function getLaminaActiva(laminaId) {
   const id = String(laminaId || "").toUpperCase();
+  const esLaminaTexto = id === "PVC" || id === "BAJAS";
   const result = await pool.query(
-    id === "PVC"
+    esLaminaTexto
       ? `
         SELECT id, nombre, activo
         FROM lamina
         WHERE UPPER(id) = $1
-           OR UPPER(nombre) LIKE '%PVC%'
+           OR UPPER(nombre) LIKE $2
         ORDER BY CASE WHEN UPPER(id) = $1 THEN 0 ELSE 1 END
         LIMIT 1
       `
@@ -301,9 +302,16 @@ async function getLaminaActiva(laminaId) {
         WHERE UPPER(id) = $1
         LIMIT 1
       `,
-    [id]
+    esLaminaTexto ? [id, id === "PVC" ? "%PVC%" : "%BAJA%"] : [id]
   );
 
+  if (!result.rows[0] && id === "BAJAS") {
+    return {
+      id: "BAJAS",
+      nombre: "BAJAS",
+      activo: true
+    };
+  }
   if (!result.rows[0]) return null;
   if (!result.rows[0].activo) return { ...result.rows[0], invalida: true };
 
