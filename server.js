@@ -225,7 +225,7 @@ function parseGrado(code) {
   }
 
   // Grados de texto permitidos
-  const textosPermitidos = ["NACIONAL"];
+  const textosPermitidos = ["NACIONAL", "BAJAS"];
 
   if (textosPermitidos.includes(up)) {
     return {
@@ -246,13 +246,6 @@ function parseLamina(code) {
       raw: "PVC",
     };
   }
-  if (up === "BAJAS" || up === "BAJA") {
-    return {
-      id: "BAJAS",
-      raw: "BAJAS",
-    };
-  }
-
   const m = up.match(/^L(\d{1,3})$/);
   if (!m) return null;
 
@@ -285,7 +278,7 @@ async function getVariedadById(variedadId) {
 
 async function getLaminaActiva(laminaId) {
   const id = String(laminaId || "").toUpperCase();
-  const esLaminaTexto = id === "PVC" || id === "BAJAS";
+  const esLaminaTexto = id === "PVC";
   const result = await pool.query(
     esLaminaTexto
       ? `
@@ -302,16 +295,9 @@ async function getLaminaActiva(laminaId) {
         WHERE UPPER(id) = $1
         LIMIT 1
       `,
-    esLaminaTexto ? [id, id === "PVC" ? "%PVC%" : "%BAJA%"] : [id]
+    esLaminaTexto ? [id, "%PVC%"] : [id]
   );
 
-  if (!result.rows[0] && id === "BAJAS") {
-    return {
-      id: "BAJAS",
-      nombre: "BAJAS",
-      activo: true
-    };
-  }
   if (!result.rows[0]) return null;
   if (!result.rows[0].activo) return { ...result.rows[0], invalida: true };
 
@@ -510,13 +496,13 @@ app.post("/api/scan", async (req, res) => {
 
     if (!gObj) {
       return res.status(400).json({
-        error: "Grado inválido. Formato esperado: G60, 60 o NACIONAL",
+        error: "Grado inválido. Formato esperado: G60, 60, NACIONAL o BAJAS",
       });
     }
 
     if (!lObj) {
       return res.status(400).json({
-        error: "Lámina inválida. Formato esperado: L1, L2, L3, PVC o BAJAS",
+        error: "Lámina inválida. Formato esperado: L1, L2, L3 o PVC",
       });
     }
 
