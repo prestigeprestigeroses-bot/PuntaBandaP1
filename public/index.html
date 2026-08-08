@@ -1655,21 +1655,21 @@ function isReprocesoLaminaRecord(r) {
         </div>
       ` : "";
 
-      const bajasHtml = `
+      const bajasHtml = wData.bajas.ramos > 0 ? `
         <div class="bajasSummary">
           <b>BAJAS</b>
           <span><strong>${wData.bajas.ramos}</strong> ramos</span>
           <span><strong>${wData.bajas.tallos}</strong> tallos</span>
         </div>
-      `;
+      ` : "";
 
-      const reprocesoHtml = `
+      const reprocesoHtml = wData.reproceso.ramos > 0 ? `
         <div class="reprocesoSummary">
           <b>REPROCESO</b>
           <span><strong>${wData.reproceso.ramos}</strong> ramos</span>
           <span><strong>${wData.reproceso.tallos}</strong> tallos</span>
         </div>
-      `;
+      ` : "";
 
       const detailHtml = varArr.length ? `
         <div style="margin-top:10px;border-top:1px dashed rgba(31,51,88,.6);padding-top:8px;">
