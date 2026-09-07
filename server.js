@@ -209,10 +209,14 @@ function parseVariedad(code) {
 
 // Grado: G40, G50, G60...
 function parseGrado(code) {
-  const up = String(code || "").trim().toUpperCase();
+  const original = String(code || "").trim().toUpperCase();
+  const up = original.replace(/_/g, " ").replace(/\s+/g, " ");
+  const gradoTexto = up === "NACIONAL-GRANEL" || up === "NACIONALGRANEL"
+    ? "NACIONAL GRANEL"
+    : up;
 
   // Grados numéricos: G60 o 60
-  const mNum = up.match(/^G?(\d{1,3})$/);
+  const mNum = gradoTexto.match(/^G?(\d{1,3})$/);
   if (mNum) {
     const grado_cm = parseInt(mNum[1], 10);
 
@@ -225,12 +229,12 @@ function parseGrado(code) {
   }
 
   // Grados de texto permitidos
-  const textosPermitidos = ["NACIONAL", "BAJAS"];
+  const textosPermitidos = ["NACIONAL", "NACIONAL GRANEL", "ELITE", "BAJAS"];
 
-  if (textosPermitidos.includes(up)) {
+  if (textosPermitidos.includes(gradoTexto)) {
     return {
-      grado_cm: up,
-      raw: up,
+      grado_cm: gradoTexto,
+      raw: gradoTexto,
     };
   }
 
