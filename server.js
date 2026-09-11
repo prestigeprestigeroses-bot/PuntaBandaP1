@@ -282,28 +282,58 @@ async function getVariedadById(variedadId) {
 
 async function getLaminaActiva(laminaId) {
   const id = String(laminaId || "").toUpperCase();
+  if (id === "L9") {
+    return {
+      id: "L9",
+      nombre: "Lámina Amarilla",
+      activo: true
+    };
+  }
   const esLaminaTexto = id === "PVC";
-  const result = await pool.query(
-    esLaminaTexto
-      ? `
-        SELECT id, nombre, activo
-        FROM lamina
-        WHERE UPPER(id) = $1
-           OR UPPER(nombre) LIKE $2
-        ORDER BY CASE WHEN UPPER(id) = $1 THEN 0 ELSE 1 END
-        LIMIT 1
-      `
-      : `
-        SELECT id, nombre, activo
-        FROM lamina
-        WHERE UPPER(id) = $1
-        LIMIT 1
-      `,
-    esLaminaTexto ? [id, "%PVC%"] : [id]
-  );
+  let result;
+  try {
+    result = await pool.query(
+      esLaminaTexto
+        ? `
+          SELECT id, nombre, activo
+          FROM lamina
+          WHERE UPPER(id) = $1
+             OR UPPER(nombre) LIKE $2
+          ORDER BY CASE WHEN UPPER(id) = $1 THEN 0 ELSE 1 END
+          LIMIT 1
+        `
+        : `
+          SELECT id, nombre, activo
+          FROM lamina
+          WHERE UPPER(id) = $1
+          LIMIT 1
+        `,
+      esLaminaTexto ? [id, "%PVC%"] : [id]
+    );
+  } catch (err) {
+    if (id === "L9") {
+      return {
+        id: "L9",
+        nombre: "Lámina Amarilla",
+        activo: true
+      };
+    }
+    throw err;
+  }
 
+  if (!result.rows[0] && id === "L9") {
+    return {
+      id: "L9",
+      nombre: "Lámina Amarilla",
+      activo: true
+    };
+  }
   if (!result.rows[0]) return null;
   if (!result.rows[0].activo) return { ...result.rows[0], invalida: true };
+
+  if (id === "L9" && (!result.rows[0].nombre || String(result.rows[0].nombre).trim().toUpperCase() === "L9")) {
+    return { ...result.rows[0], nombre: "Lámina Amarilla" };
+  }
 
   return result.rows[0];
 }

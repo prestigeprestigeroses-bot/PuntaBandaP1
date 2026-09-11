@@ -246,6 +246,13 @@
   box-shadow: 0 0 22px rgba(168,85,247,.38);
 }
 
+.lamina-amarilla {
+  background: linear-gradient(180deg, #facc15, #ca8a04) !important;
+  border: 2px solid #fde047 !important;
+  color: #111827 !important;
+  box-shadow: 0 0 22px rgba(250,204,21,.42);
+}
+
 .lamina-pvc {
   background:
     linear-gradient(135deg, rgba(255,255,255,.20), rgba(255,255,255,.04)),
@@ -309,6 +316,31 @@
 .lamina-blanca .subPill b,
 .lamina-blanca .pill b {
   color: #020617 !important;
+}
+
+.lamina-amarilla,
+.lamina-amarilla * {
+  color: #111827 !important;
+}
+
+.lamina-amarilla .subPill,
+.lamina-amarilla .pill {
+  background: rgba(17,24,39,.10) !important;
+  border: 1px solid rgba(17,24,39,.32) !important;
+}
+
+.lamina-amarilla .subPill b,
+.lamina-amarilla .pill b {
+  color: #111827 !important;
+}
+
+.lamina-amarilla .bigLab,
+.lamina-amarilla .hint {
+  color: rgba(17,24,39,.80) !important;
+}
+
+.lamina-amarilla div[style*="border-top"] {
+  border-top-color: rgba(17,24,39,.30) !important;
 }
 
 .lamina-blanca .bigLab,
@@ -1068,7 +1100,7 @@ function addOfflineScanToView(item) {
     variedad_nombre: variedadObj ? (variedadNameMap[variedadObj.variedad] || variedadObj.variedad) : null,
     grado_cm: gradoObj?.grado || String(payload.grado || "").trim().toUpperCase(),
     lamina_id: laminaObj?.id || null,
-    lamina_nombre: laminaObj ? (laminaNameMap[laminaObj.id] || laminaObj.id) : null,
+    lamina_nombre: laminaObj ? displayLaminaLabel(laminaObj.id, laminaNameMap[laminaObj.id] || laminaObj.id) : null,
     finca: fincaObj?.finca || null,
     offline_pending: true
   });
@@ -1830,7 +1862,7 @@ function isReprocesoLaminaRecord(r) {
 }
   function populateFilterOptions() {
   const laminas = [...new Set(
-    scans.map(r => String(r.lamina_nombre || r.lamina_id || "").trim()).filter(Boolean)
+    scans.map(r => displayLaminaLabel(r.lamina_id, r.lamina_nombre)).filter(Boolean)
   )].sort();
 
   const variedades = [...new Set(
@@ -1928,10 +1960,11 @@ function isReprocesoLaminaRecord(r) {
       const variedadNombre = String(r.variedad_nombre || "").trim().toUpperCase();
       const laminaId = String(r.lamina_id || "").trim().toUpperCase();
       const laminaNombre = String(r.lamina_nombre || "").trim().toUpperCase();
+      const laminaLabel = displayLaminaLabel(r.lamina_id, r.lamina_nombre).toUpperCase();
 
       if (workerSelected && worker !== workerSelected) return false;
       if (variedadSelected && variedadId !== variedadSelected && variedadNombre !== variedadSelected) return false;
-      if (laminaSelected && laminaId !== laminaSelected && laminaNombre !== laminaSelected) return false;
+      if (laminaSelected && laminaId !== laminaSelected && laminaNombre !== laminaSelected && laminaLabel !== laminaSelected) return false;
 
       return true;
     })
@@ -1951,7 +1984,7 @@ function isReprocesoLaminaRecord(r) {
       <td>${r.tallos ?? ""}</td>
       <td><span class="pill mono">${r.variedad_nombre ?? r.variedad_id ?? "—"}</span></td>
       <td>${r.grado_cm || ""}</td>
-      <td><span class="pill mono">${r.lamina_nombre ?? r.lamina_id ?? "—"}</span></td>
+      <td><span class="pill mono">${displayLaminaLabel(r.lamina_id, r.lamina_nombre) || "—"}</span></td>
       <td>${r.finca ? `<span class="pill mono">${escapeHtml(r.finca)}</span>` : ""}</td>
       <td>
         <button class="btnDeleteScan" data-id="${r.id}" ${(history || pending) ? "disabled" : ""}>
@@ -1983,9 +2016,18 @@ function getLaminaColorClass(nombreLamina) {
   if (txt.includes("BLANCA") || txt.includes("BLANCO")) return "lamina-blanca";
   if (txt.includes("NEGRA") || txt.includes("NEGRO")) return "lamina-negra";
   if (txt.includes("MORADA") || txt.includes("MORADO")) return "lamina-morada";
+  if (txt === "L9" || txt.includes("AMARILLA") || txt.includes("AMARILLO")) return "lamina-amarilla";
   if (txt.includes("PVC")) return "lamina-pvc";
 
   return "lamina-default";
+}
+
+function displayLaminaLabel(idOrName, fallbackName = "") {
+  const id = String(idOrName || "").trim();
+  const name = String(fallbackName || "").trim();
+  const label = name || id;
+  if (id.toUpperCase() === "L9" || label.toUpperCase() === "L9") return "Lámina Amarilla";
+  return label;
 }
 
 function renderSummaryByLamina() {
@@ -1993,7 +2035,7 @@ function renderSummaryByLamina() {
   const map = {};
 
   for (const r of rows) {
-    const laminaKey = String(r.lamina_nombre || r.lamina_id || "SIN LÁMINA").trim();
+    const laminaKey = displayLaminaLabel(r.lamina_id, r.lamina_nombre) || "SIN LÁMINA";
     const variedadKey = String(r.variedad_nombre || r.variedad_id || "—").trim();
     const tallos = Number(r.tallos || 0);
 
@@ -2418,7 +2460,8 @@ function displayLaminaScan() {
   const code = pendingL.id || pendingL.raw;
   const name = String(laminaNameMap[code] || "").trim();
 
-  if (name && name !== code) return `${name} (${code})`;
+  if (code === "L9") return "Lámina Amarilla (L9)";
+  if (name && name !== code) return `${displayLaminaLabel(code, name)} (${code})`;
   return code;
 }
 
@@ -2440,6 +2483,12 @@ async function loadVariedadName(vObj) {
 async function loadLaminaName(lObj) {
   const code = lObj?.id || lObj?.raw;
   if (!code || laminaNameMap[code]) return;
+
+  if (code === "L9") {
+    laminaNameMap[code] = "Lámina Amarilla";
+    updateScanProgressUI();
+    return;
+  }
 
   try {
     const res = await fetch(`${API}/api/laminas/${encodeURIComponent(code)}`, { cache: "no-store" });
