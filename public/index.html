@@ -489,15 +489,25 @@
     .manualSpecialForm button{font-weight:900;background:#7c3aed;border-color:#c4b5fd;color:#fff}
     .manualSpecialForm button:disabled{opacity:.55;cursor:wait}
     .manualSpecialStatus{min-height:18px;margin-top:8px;color:#c4b5fd}
-    .manualSpecialSummary{max-height:250px;overflow:auto;border:1px solid rgba(167,139,250,.3);border-radius:10px}
+    .manualSpecialSummary{max-height:340px;overflow:auto;border:1px solid rgba(167,139,250,.3);border-radius:10px;padding:10px}
     .manualSpecialSummary table{font-size:12px}
     .manualSpecialSummary .empty{padding:18px;text-align:center;color:var(--muted)}
+    .specialGradeTotals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:10px}
+    .specialGradeTotal{padding:9px;border:1px solid var(--line);border-radius:8px;background:rgba(10,18,32,.42)}
+    .specialGradeTotal span{display:block;font-size:10px;font-weight:900;color:var(--muted)}
+    .specialGradeTotal strong{display:block;margin-top:4px;font-size:22px;line-height:1;color:#fff}
+    .specialGradeTotal small{display:block;margin-top:5px;color:#9bb0d0}
+    .specialGradeTotal.nacional{border-color:#facc15;box-shadow:inset 3px 0 0 #facc15}
+    .specialGradeTotal.bajas{border-color:#fb7185;box-shadow:inset 3px 0 0 #fb7185}
+    .specialGradeTotal.granel{border-color:#a78bfa;box-shadow:inset 3px 0 0 #a78bfa}
+    .manualLaminaHint{display:block;margin-top:4px;color:#86efac;font-size:11px;font-weight:800}
     @media(max-width:850px){
       .manualSpecialGrid{grid-template-columns:1fr}
     }
     @media(max-width:520px){
       .manualSpecialForm{grid-template-columns:1fr}
       .manualSpecialForm .full{grid-column:auto}
+      .specialGradeTotals{grid-template-columns:1fr}
     }
     .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     .legItem{display:flex;gap:8px;align-items:center;border:1px solid rgba(31,51,88,.7);border-radius:999px;padding:6px 10px;background:rgba(10,18,32,.25)}
@@ -730,16 +740,23 @@
         <datalist id="manualSpecialVarieties"></datalist>
       </label>
       <label>Lámina
-        <input id="manualSpecialLamina" class="mono" list="manualSpecialLaminas" placeholder="L1" value="L1" required />
+        <input id="manualSpecialLamina" class="mono" list="manualSpecialLaminas" placeholder="L6" value="L6" required />
         <datalist id="manualSpecialLaminas"></datalist>
+        <span id="manualSpecialLaminaHint" class="manualLaminaHint">L6 - PVC</span>
       </label>
-      <label class="full">Cantidad de ramos
+      <label>Finca
+        <select id="manualSpecialFinca" required>
+          <option value="P1" selected>P1</option>
+          <option value="P2">P2</option>
+        </select>
+      </label>
+      <label>Cantidad de ramos
         <input id="manualSpecialQuantity" type="number" min="1" max="500" step="1" value="1" required />
       </label>
       <button id="manualSpecialSubmit" class="full" type="submit">Guardar ramos</button>
     </form>
     <div>
-      <div class="hint" style="margin-bottom:6px;">Resumen por grado y variedad</div>
+      <div class="hint" style="margin-bottom:6px;">Totales de grados especiales y detalle por variedad</div>
       <div id="manualSpecialSummary" class="manualSpecialSummary"></div>
       <div id="manualSpecialStatus" class="manualSpecialStatus hint" aria-live="polite"></div>
     </div>
@@ -927,6 +944,8 @@ const tbVariedad = $("tbVariedad");
   const manualSpecialGrade = $("manualSpecialGrade");
   const manualSpecialVariety = $("manualSpecialVariety");
   const manualSpecialLamina = $("manualSpecialLamina");
+  const manualSpecialLaminaHint = $("manualSpecialLaminaHint");
+  const manualSpecialFinca = $("manualSpecialFinca");
   const manualSpecialQuantity = $("manualSpecialQuantity");
   const manualSpecialSubmit = $("manualSpecialSubmit");
   const manualSpecialSummary = $("manualSpecialSummary");
@@ -1009,7 +1028,7 @@ const lastLEl = $("lastLPending");
     if (manualScan) manualScan.disabled = history;
     if (btnSerial) btnSerial.disabled = history;
     if (btnFocus) btnFocus.disabled = history;
-    for (const control of [manualSpecialWorker, manualSpecialGrade, manualSpecialVariety, manualSpecialLamina, manualSpecialQuantity, manualSpecialSubmit]) {
+    for (const control of [manualSpecialWorker, manualSpecialGrade, manualSpecialVariety, manualSpecialLamina, manualSpecialFinca, manualSpecialQuantity, manualSpecialSubmit]) {
       if (control) control.disabled = history;
     }
 
@@ -2237,7 +2256,9 @@ function populateManualSpecialOptions() {
       const name = workerNameMap[code] || code;
       return `<option value="${escapeHtml(code)}">${escapeHtml(code)} - ${escapeHtml(name)}</option>`;
     }).join("");
-    if (workers.includes(currentWorker)) manualSpecialWorker.value = currentWorker;
+    manualSpecialWorker.value = workers.includes(currentWorker)
+      ? currentWorker
+      : (workers.includes("B01") ? "B01" : (workers[0] || ""));
   }
 
   if (manualSpecialVarieties) {
@@ -2251,8 +2272,20 @@ function populateManualSpecialOptions() {
     const ids = new Set(["L1","L2","L3","L4","L5","L6","L7","L8","L9","PVC", ...Object.keys(laminaNameMap)]);
     manualSpecialLaminas.innerHTML = [...ids]
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      .map(code => `<option value="${escapeHtml(code)}">${escapeHtml(displayLaminaLabel(code, laminaNameMap[code] || code))}</option>`)
+      .map(code => {
+        const knownName = code === "L6" ? "PVC" : (code === "L8" ? "TABACO" : (laminaNameMap[code] || code));
+        return `<option value="${escapeHtml(code)}">${escapeHtml(displayLaminaLabel(code, knownName))}</option>`;
+      })
       .join("");
+  }
+}
+
+function syncManualSpecialLamina() {
+  if (!manualSpecialGrade || !manualSpecialLamina) return;
+  const isGranel = normalizePlainText(manualSpecialGrade.value) === "NACIONAL GRANEL";
+  manualSpecialLamina.value = isGranel ? "L8" : "L6";
+  if (manualSpecialLaminaHint) {
+    manualSpecialLaminaHint.textContent = isGranel ? "L8 - TABACO" : "L6 - PVC";
   }
 }
 
@@ -2261,6 +2294,11 @@ function renderManualSpecialSummary() {
 
   const allowed = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL"]);
   const map = new Map();
+  const totals = {
+    "NACIONAL": { ramos: 0, tallos: 0, variedades: new Set() },
+    "BAJAS": { ramos: 0, tallos: 0, variedades: new Set() },
+    "NACIONAL GRANEL": { ramos: 0, tallos: 0, variedades: new Set() }
+  };
 
   for (const r of scans) {
     const grado = normalizePlainText(r.grado_cm);
@@ -2272,18 +2310,40 @@ function renderManualSpecialSummary() {
     current.ramos += 1;
     current.tallos += Number(r.tallos || 0);
     map.set(key, current);
+    totals[grado].ramos += 1;
+    totals[grado].tallos += Number(r.tallos || 0);
+    totals[grado].variedades.add(variedad);
   }
 
   const rows = [...map.values()].sort((a, b) =>
     a.grado.localeCompare(b.grado) || b.ramos - a.ramos || a.variedad.localeCompare(b.variedad)
   );
 
-  if (!rows.length) {
-    manualSpecialSummary.innerHTML = `<div class="empty">Todavía no hay ramos de estos grados.</div>`;
-    return;
-  }
+  const totalRamos = Object.values(totals).reduce((sum, item) => sum + item.ramos, 0);
+  const totalTallos = Object.values(totals).reduce((sum, item) => sum + item.tallos, 0);
+  const totalCards = [
+    ["NACIONAL", "nacional"],
+    ["BAJAS", "bajas"],
+    ["NACIONAL GRANEL", "granel"]
+  ].map(([grado, cssClass]) => {
+    const item = totals[grado];
+    return `
+      <div class="specialGradeTotal ${cssClass}">
+        <span>${escapeHtml(grado)}</span>
+        <strong>${item.ramos} ramos</strong>
+        <small>${item.tallos} tallos · ${item.variedades.size} variedades</small>
+      </div>
+    `;
+  }).join("");
 
   manualSpecialSummary.innerHTML = `
+    <div class="split" style="margin-bottom:9px;">
+      <b>TOTAL GENERAL</b>
+      <span class="pill mono">${totalRamos} ramos · ${totalTallos} tallos</span>
+    </div>
+    <div class="specialGradeTotals">${totalCards}</div>
+    <div class="hint" style="margin:4px 0 6px;">Detalle por variedad</div>
+    ${rows.length ? `
     <table>
       <thead><tr><th>Grado</th><th>Variedad</th><th>Ramos</th><th>Tallos</th></tr></thead>
       <tbody>${rows.map(row => `
@@ -2295,6 +2355,7 @@ function renderManualSpecialSummary() {
         </tr>
       `).join("")}</tbody>
     </table>
+    ` : `<div class="empty">Todavía no hay ramos registrados en estos grados.</div>`}
   `;
 }
 
@@ -3016,6 +3077,7 @@ async function submitManualSpecialRecords() {
   const varietyCode = String(manualSpecialVariety?.value || "").trim().toUpperCase();
   const gradeCode = String(manualSpecialGrade?.value || "").trim().toUpperCase();
   const laminaCode = String(manualSpecialLamina?.value || "").trim().toUpperCase();
+  const fincaCode = String(manualSpecialFinca?.value || "").trim().toUpperCase();
   const quantity = Number(manualSpecialQuantity?.value);
 
   const workerObj = parseBonchador(`${workerCode}-T25`);
@@ -3024,8 +3086,8 @@ async function submitManualSpecialRecords() {
   const laminaObj = parseL(laminaCode);
   const allowedGrades = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL"]);
 
-  if (!workerObj || !varietyObj || !gradeObj || !allowedGrades.has(gradeObj.grado) || !laminaObj || !Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
-    manualSpecialStatus.textContent = "Revise bonchador, variedad, grado, lámina y cantidad (1 a 500).";
+  if (!workerObj || !varietyObj || !gradeObj || !allowedGrades.has(gradeObj.grado) || !laminaObj || !/^(P1|P2)$/.test(fincaCode) || !Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+    manualSpecialStatus.textContent = "Revise bonchador, variedad, grado, lámina, finca y cantidad (1 a 500).";
     manualSpecialStatus.style.color = "#fda4af";
     return;
   }
@@ -3034,7 +3096,8 @@ async function submitManualSpecialRecords() {
     worker: workerObj.raw,
     variedad: varietyObj.raw,
     grado: gradeObj.raw,
-    lamina: laminaObj.raw
+    lamina: laminaObj.raw,
+    finca: fincaCode
   };
 
   manualSpecialSubmit.disabled = true;
@@ -3076,7 +3139,7 @@ async function submitManualSpecialRecords() {
       manualSpecialStatus.textContent = `${saved} ramos guardados; ${queued} quedaron en cola por falta de conexión.`;
     } else {
       manualSpecialStatus.style.color = "#86efac";
-      manualSpecialStatus.textContent = `${saved} ramos registrados: ${gradeObj.grado}, ${varietyObj.variedad}, 25 tallos.`;
+      manualSpecialStatus.textContent = `${saved} ramos registrados: ${gradeObj.grado}, ${varietyObj.variedad}, ${laminaObj.id}, ${fincaCode}, 25 tallos.`;
       manualSpecialQuantity.value = "1";
     }
   } finally {
@@ -3395,6 +3458,7 @@ document.addEventListener("keydown", async (e) => {
   });
 
   btnFocus.addEventListener("click", focusScan);
+  manualSpecialGrade?.addEventListener("change", syncManualSpecialLamina);
   manualSpecialForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     await submitManualSpecialRecords();
