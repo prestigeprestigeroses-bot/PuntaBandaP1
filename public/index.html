@@ -30,7 +30,33 @@
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
     .hint{color:var(--muted);font-size:12px;line-height:1.35}
     .split{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    .scanBox{border:1px dashed rgba(155,176,208,.5);border-radius:14px;padding:10px;background:rgba(10,18,32,.22);margin-top:10px}
+    .scanBox{border:1px dashed rgba(155,176,208,.5);border-radius:14px;padding:0;background:rgba(10,18,32,.22);margin-top:10px;overflow:hidden}
+    .collapsibleSummary{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:11px 14px;
+      cursor:pointer;
+      list-style:none;
+      font-weight:900;
+      color:#e7eefc;
+      background:rgba(15,27,47,.78);
+      user-select:none;
+    }
+    .collapsibleSummary::-webkit-details-marker{display:none}
+    .collapsibleSummary::after{
+      content:"+ Abrir";
+      flex:0 0 auto;
+      padding:4px 9px;
+      border:1px solid rgba(34,197,94,.7);
+      border-radius:999px;
+      color:#86efac;
+      font-size:11px;
+    }
+    details[open] > .collapsibleSummary::after{content:"− Minimizar"}
+    details[open] > .collapsibleSummary{border-bottom:1px solid rgba(155,176,208,.24)}
+    .scanToolsBody{padding:10px}
     .okTxt{color:rgba(34,197,94,.95)}
     .warnTxt{color:rgba(255, 0, 0, 0.95)}
     /* =========================
@@ -444,6 +470,35 @@
       box-shadow:inset 3px 0 0 rgba(245,158,11,.9);
     }
     .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .manualSpecialSection{
+      margin-top:14px;
+      padding:0;
+      border:1px solid rgba(167,139,250,.55);
+      border-radius:12px;
+      background:linear-gradient(135deg,rgba(76,29,149,.16),rgba(10,18,32,.32));
+      box-shadow:inset 3px 0 0 #a78bfa;
+      overflow:hidden;
+    }
+    .manualSpecialHeader{color:#ede9fe;background:rgba(76,29,149,.24)}
+    .manualSpecialHeader .manualSpecialTitle{font-size:15px;color:#ede9fe}
+    .manualSpecialHeader::after{border-color:rgba(167,139,250,.8);color:#ddd6fe}
+    .manualSpecialGrid{display:grid;grid-template-columns:minmax(300px,.8fr) minmax(420px,1.2fr);gap:12px;padding:12px}
+    .manualSpecialForm{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .manualSpecialForm label{margin:0}
+    .manualSpecialForm .full{grid-column:1 / -1}
+    .manualSpecialForm button{font-weight:900;background:#7c3aed;border-color:#c4b5fd;color:#fff}
+    .manualSpecialForm button:disabled{opacity:.55;cursor:wait}
+    .manualSpecialStatus{min-height:18px;margin-top:8px;color:#c4b5fd}
+    .manualSpecialSummary{max-height:250px;overflow:auto;border:1px solid rgba(167,139,250,.3);border-radius:10px}
+    .manualSpecialSummary table{font-size:12px}
+    .manualSpecialSummary .empty{padding:18px;text-align:center;color:var(--muted)}
+    @media(max-width:850px){
+      .manualSpecialGrid{grid-template-columns:1fr}
+    }
+    @media(max-width:520px){
+      .manualSpecialForm{grid-template-columns:1fr}
+      .manualSpecialForm .full{grid-column:auto}
+    }
     .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     .legItem{display:flex;gap:8px;align-items:center;border:1px solid rgba(31,51,88,.7);border-radius:999px;padding:6px 10px;background:rgba(10,18,32,.25)}
     .sw{width:10px;height:10px;border-radius:3px}
@@ -651,6 +706,46 @@
   </table>
 </div>
 
+<details class="manualSpecialSection">
+  <summary class="collapsibleSummary manualSpecialHeader">
+    <span id="manualSpecialTitle" class="manualSpecialTitle">Ingreso manual de ramos especiales</span>
+    <span class="pill mono">25 tallos por ramo</span>
+  </summary>
+  <div class="manualSpecialGrid">
+    <form id="manualSpecialForm" class="manualSpecialForm">
+      <label>Bonchador
+        <select id="manualSpecialWorker" required>
+          <option value="">Seleccione</option>
+        </select>
+      </label>
+      <label>Grado
+        <select id="manualSpecialGrade" required>
+          <option value="NACIONAL">NACIONAL</option>
+          <option value="BAJAS">BAJAS</option>
+          <option value="NACIONAL GRANEL">NACIONAL GRANEL</option>
+        </select>
+      </label>
+      <label>Variedad
+        <input id="manualSpecialVariety" class="mono" list="manualSpecialVarieties" placeholder="V01" maxlength="3" required />
+        <datalist id="manualSpecialVarieties"></datalist>
+      </label>
+      <label>Lámina
+        <input id="manualSpecialLamina" class="mono" list="manualSpecialLaminas" placeholder="L1" value="L1" required />
+        <datalist id="manualSpecialLaminas"></datalist>
+      </label>
+      <label class="full">Cantidad de ramos
+        <input id="manualSpecialQuantity" type="number" min="1" max="500" step="1" value="1" required />
+      </label>
+      <button id="manualSpecialSubmit" class="full" type="submit">Guardar ramos</button>
+    </form>
+    <div>
+      <div class="hint" style="margin-bottom:6px;">Resumen por grado y variedad</div>
+      <div id="manualSpecialSummary" class="manualSpecialSummary"></div>
+      <div id="manualSpecialStatus" class="manualSpecialStatus hint" aria-live="polite"></div>
+    </div>
+  </div>
+</details>
+
       <div class="split" style="margin-top:12px;">
   <div class="pill">Últimos registros</div>
 
@@ -697,7 +792,12 @@
         <span class="pill mono" id="capState">CAPTURA: INACTIVA</span>
       </div>
 
-      <div class="scanBox">
+      <details class="scanBox">
+        <summary class="collapsibleSummary">
+          <span>Escaneo y entrada manual</span>
+          <span class="pill mono">F9 para activar</span>
+        </summary>
+        <div class="scanToolsBody">
         <div class="split">
           <div class="pill">Escaneo</div>
           <button id="btnFocus" class="ghost" type="button">Activar captura (F9)</button>
@@ -734,15 +834,12 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
             Conectar lector USB (Serial)
           </button>
         </div>
-      </div>
+        </div>
+      </details>
 
       <label style="margin-top:12px;">Nombres de bonchadores</label>
       <div id="namesBox" style="display:grid;grid-template-columns:1fr;gap:8px;"></div>
       <button id="btnSaveNames" class="ghost" type="button" style="margin-top:8px;">Guardar nombres</button>
-
-      <label style="margin-top:12px;">Pendientes por bonchador</label>
-      <div class="hint mono" id="pendingBox"
-           style="padding:10px;border:1px solid var(--line);border-radius:12px;background:rgba(10,18,32,.25);white-space:pre-wrap">—</div>
 
       <label style="margin-top:12px;">Ver registros por fecha</label>
       <div class="row2">
@@ -797,7 +894,6 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
   const manualScan = $("manualScan");
   const scanInput = $("scanInput");
   const lastScanEl = $("lastScan");
-  const pendingBox = $("pendingBox");
   const btnRefresh = $("btnRefresh");
   const historyDate = $("historyDate");
   const btnViewDate = $("btnViewDate");
@@ -826,6 +922,17 @@ const tbVariedad = $("tbVariedad");
   const workerFilter = $("workerFilter");
   const variedadFilter = $("variedadFilter");
   const laminaFilter = $("laminaFilter");
+  const manualSpecialForm = $("manualSpecialForm");
+  const manualSpecialWorker = $("manualSpecialWorker");
+  const manualSpecialGrade = $("manualSpecialGrade");
+  const manualSpecialVariety = $("manualSpecialVariety");
+  const manualSpecialLamina = $("manualSpecialLamina");
+  const manualSpecialQuantity = $("manualSpecialQuantity");
+  const manualSpecialSubmit = $("manualSpecialSubmit");
+  const manualSpecialSummary = $("manualSpecialSummary");
+  const manualSpecialStatus = $("manualSpecialStatus");
+  const manualSpecialVarieties = $("manualSpecialVarieties");
+  const manualSpecialLaminas = $("manualSpecialLaminas");
   const scanProgressBox = $("scanProgressBox");
 const stepWorker = $("stepWorker");
 const stepVariedad = $("stepVariedad");
@@ -902,6 +1009,9 @@ const lastLEl = $("lastLPending");
     if (manualScan) manualScan.disabled = history;
     if (btnSerial) btnSerial.disabled = history;
     if (btnFocus) btnFocus.disabled = history;
+    for (const control of [manualSpecialWorker, manualSpecialGrade, manualSpecialVariety, manualSpecialLamina, manualSpecialQuantity, manualSpecialSubmit]) {
+      if (control) control.disabled = history;
+    }
 
     if (history) {
       captureEnabled = false;
@@ -1819,18 +1929,6 @@ function isReprocesoLaminaRecord(r) {
     }
   }
 
-  function renderPendingBox() {
-    const lines = [];
-    for (const w of workers) {
-      const p = pendingAll[w] || {};
-      const varLabel = (p.variedad_nombre || p.variedad || "—");
-      const grado = (p.grado ?? p.grade ?? "—");
-      const tallos = (p.tallos ?? "—");
-      lines.push(`${w}  VAR:${varLabel}  GR:${grado}  T:${tallos}`);
-    }
-    pendingBox.textContent = lines.join("\n");
-  }
-
   function renderNamesEditorOnce() {
     namesBox.innerHTML = "";
     for (const w of workers) {
@@ -2132,6 +2230,74 @@ function renderSummaryByVariedad() {
   `;
 }
 
+function populateManualSpecialOptions() {
+  if (manualSpecialWorker) {
+    const currentWorker = manualSpecialWorker.value;
+    manualSpecialWorker.innerHTML = `<option value="">Seleccione</option>` + workers.map(code => {
+      const name = workerNameMap[code] || code;
+      return `<option value="${escapeHtml(code)}">${escapeHtml(code)} - ${escapeHtml(name)}</option>`;
+    }).join("");
+    if (workers.includes(currentWorker)) manualSpecialWorker.value = currentWorker;
+  }
+
+  if (manualSpecialVarieties) {
+    manualSpecialVarieties.innerHTML = Object.entries(variedadNameMap)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([code, name]) => `<option value="${escapeHtml(code)}">${escapeHtml(name || code)}</option>`)
+      .join("");
+  }
+
+  if (manualSpecialLaminas) {
+    const ids = new Set(["L1","L2","L3","L4","L5","L6","L7","L8","L9","PVC", ...Object.keys(laminaNameMap)]);
+    manualSpecialLaminas.innerHTML = [...ids]
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map(code => `<option value="${escapeHtml(code)}">${escapeHtml(displayLaminaLabel(code, laminaNameMap[code] || code))}</option>`)
+      .join("");
+  }
+}
+
+function renderManualSpecialSummary() {
+  if (!manualSpecialSummary) return;
+
+  const allowed = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL"]);
+  const map = new Map();
+
+  for (const r of scans) {
+    const grado = normalizePlainText(r.grado_cm);
+    if (!allowed.has(grado)) continue;
+
+    const variedad = String(r.variedad_nombre || r.variedad_id || "SIN VARIEDAD").trim();
+    const key = `${grado}\u0000${variedad}`;
+    const current = map.get(key) || { grado, variedad, ramos: 0, tallos: 0 };
+    current.ramos += 1;
+    current.tallos += Number(r.tallos || 0);
+    map.set(key, current);
+  }
+
+  const rows = [...map.values()].sort((a, b) =>
+    a.grado.localeCompare(b.grado) || b.ramos - a.ramos || a.variedad.localeCompare(b.variedad)
+  );
+
+  if (!rows.length) {
+    manualSpecialSummary.innerHTML = `<div class="empty">Todavía no hay ramos de estos grados.</div>`;
+    return;
+  }
+
+  manualSpecialSummary.innerHTML = `
+    <table>
+      <thead><tr><th>Grado</th><th>Variedad</th><th>Ramos</th><th>Tallos</th></tr></thead>
+      <tbody>${rows.map(row => `
+        <tr>
+          <td><b>${escapeHtml(row.grado)}</b></td>
+          <td>${escapeHtml(row.variedad)}</td>
+          <td><b>${row.ramos}</b></td>
+          <td>${row.tallos}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+  `;
+}
+
 function renderAll() {
   const counts = countsByWorker();
   const stems  = stemsByWorkerFiltered();
@@ -2139,12 +2305,13 @@ function renderAll() {
   const displayWorkers = getDisplayWorkers(counts);
   const graphWorkers = (activeSel.value === "active") ? getActiveWorkers(counts) : displayWorkers;
 
-  renderPendingBox();
   buildLegend(displayWorkers);
   drawWorkerChart(graphWorkers, counts, stems);
   renderWorkerCards(displayWorkers, counts, stems);
   renderSummaryByLamina();
   renderSummaryByVariedad();
+  renderManualSpecialSummary();
+  populateManualSpecialOptions();
   populateFilterOptions();
   renderTable();
 }
@@ -2839,6 +3006,88 @@ async function sendX6Batch() {
   }
 }
 
+async function submitManualSpecialRecords() {
+  if (isHistoryMode()) {
+    manualSpecialStatus.textContent = "Esta fecha es de solo lectura. Vuelve a hoy para registrar.";
+    return;
+  }
+
+  const workerCode = String(manualSpecialWorker?.value || "").trim().toUpperCase();
+  const varietyCode = String(manualSpecialVariety?.value || "").trim().toUpperCase();
+  const gradeCode = String(manualSpecialGrade?.value || "").trim().toUpperCase();
+  const laminaCode = String(manualSpecialLamina?.value || "").trim().toUpperCase();
+  const quantity = Number(manualSpecialQuantity?.value);
+
+  const workerObj = parseBonchador(`${workerCode}-T25`);
+  const varietyObj = parseV(varietyCode);
+  const gradeObj = parseG(gradeCode);
+  const laminaObj = parseL(laminaCode);
+  const allowedGrades = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL"]);
+
+  if (!workerObj || !varietyObj || !gradeObj || !allowedGrades.has(gradeObj.grado) || !laminaObj || !Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+    manualSpecialStatus.textContent = "Revise bonchador, variedad, grado, lámina y cantidad (1 a 500).";
+    manualSpecialStatus.style.color = "#fda4af";
+    return;
+  }
+
+  const payload = {
+    worker: workerObj.raw,
+    variedad: varietyObj.raw,
+    grado: gradeObj.raw,
+    lamina: laminaObj.raw
+  };
+
+  manualSpecialSubmit.disabled = true;
+  manualSpecialStatus.style.color = "#c4b5fd";
+  manualSpecialStatus.textContent = `Guardando 0 de ${quantity} ramos...`;
+
+  let next = 0;
+  let saved = 0;
+  let queued = 0;
+  const errors = [];
+
+  async function saveNext() {
+    while (next < quantity) {
+      const itemNumber = ++next;
+      const out = await sendToServer(payload);
+
+      if (out.ok) {
+        saved += 1;
+        if (out.offline) queued += 1;
+        if (out.data?.reg) addScanIfNotExists(out.data.reg);
+      } else {
+        errors.push(out.data?.error || `No se pudo guardar el ramo ${itemNumber}`);
+      }
+
+      manualSpecialStatus.textContent = `Guardando ${saved + errors.length} de ${quantity} ramos...`;
+    }
+  }
+
+  try {
+    const concurrency = Math.min(5, quantity);
+    await Promise.all(Array.from({ length: concurrency }, () => saveNext()));
+    renderAll();
+
+    if (errors.length) {
+      manualSpecialStatus.style.color = "#fda4af";
+      manualSpecialStatus.textContent = `${saved} guardados y ${errors.length} con error: ${errors[0]}`;
+    } else if (queued) {
+      manualSpecialStatus.style.color = "#fde68a";
+      manualSpecialStatus.textContent = `${saved} ramos guardados; ${queued} quedaron en cola por falta de conexión.`;
+    } else {
+      manualSpecialStatus.style.color = "#86efac";
+      manualSpecialStatus.textContent = `${saved} ramos registrados: ${gradeObj.grado}, ${varietyObj.variedad}, 25 tallos.`;
+      manualSpecialQuantity.value = "1";
+    }
+  } finally {
+    manualSpecialSubmit.disabled = false;
+    setTimeout(() => {
+      suspendAutoFocus = false;
+      focusScanInput();
+    }, 250);
+  }
+}
+
   function addScanIfNotExists(reg) {
   if (!reg || reg.id == null) return;
 
@@ -3096,6 +3345,8 @@ function isUserEditing() {
 
   if (tag === "input" && el !== scanInput) return true;
 
+  if (tag === "select") return true;
+
   return false;
 }
 
@@ -3144,6 +3395,10 @@ document.addEventListener("keydown", async (e) => {
   });
 
   btnFocus.addEventListener("click", focusScan);
+  manualSpecialForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await submitManualSpecialRecords();
+  });
   document.addEventListener("keydown", (e) => { if (e.key === "F9") focusScan(); });
 
   let buffer = "";
@@ -3285,12 +3540,13 @@ if (msg.kind === "delete" && msg.id) {
   const displayWorkers = getDisplayWorkers(counts);
   const graphWorkers = (activeSel.value === "active") ? getActiveWorkers(counts) : displayWorkers;
 
-  renderPendingBox();
   buildLegend(displayWorkers);
   drawWorkerChart(graphWorkers, counts, stems, true);
   renderWorkerCards(displayWorkers, counts, stems);
   renderSummaryByLamina();
   renderSummaryByVariedad();
+  renderManualSpecialSummary();
+  populateManualSpecialOptions();
   populateFilterOptions();
   renderTable();
 }
@@ -3321,7 +3577,7 @@ if (msg.kind === "delete" && msg.id) {
     }
   }
 
-  const INTERACTIVE_SELECTOR = 'input:not(#scanInput), textarea, [contenteditable="true"], button:not(#btnFocus):not(#btnSerial)';
+  const INTERACTIVE_SELECTOR = 'input:not(#scanInput), select, textarea, [contenteditable="true"], button:not(#btnFocus):not(#btnSerial)';
   let suspendAutoFocus = false;
 
   function focusScanInput() {
