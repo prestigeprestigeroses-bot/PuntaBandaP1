@@ -2438,6 +2438,42 @@ function mergeScans(rows = []) {
   renderWorkerFilter();
 }
 
+async function loadVariedadesCatalog() {
+  const cacheKey = "variedadesCatalogP1";
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || "[]");
+    if (Array.isArray(cached)) {
+      for (const item of cached) {
+        const id = String(item?.id || "").trim().toUpperCase();
+        const name = String(item?.nombre || id).trim();
+        if (id) variedadNameMap[id] = name || id;
+      }
+    }
+  } catch {}
+
+  const res = await fetch(API + "/api/variedades", { cache: "no-store" }).catch(() => null);
+  if (!res || !res.ok) {
+    populateManualSpecialOptions();
+    return;
+  }
+
+  const catalog = await res.json().catch(() => []);
+  if (!Array.isArray(catalog)) return;
+
+  for (const item of catalog) {
+    const id = String(item?.id || "").trim().toUpperCase();
+    const name = String(item?.nombre || id).trim();
+    if (id) variedadNameMap[id] = name || id;
+  }
+
+  try {
+    localStorage.setItem("variedadesCatalogP1", JSON.stringify(catalog));
+  } catch {}
+
+  populateManualSpecialOptions();
+}
+
   async function refreshAll(options = {}) {
     const history = isHistoryMode();
     const replace = !!options.replace;
@@ -3856,6 +3892,7 @@ window.addEventListener("pageshow", activarEscaneoInicial);
 
   try {
       await loadWorkers();
+      await loadVariedadesCatalog();
       pillApi.textContent = "API: OK";
       setStatus(true, "Conectado", "API");
       await refreshAll();
