@@ -790,7 +790,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
       WHERE s.ts >= $1
         AND s.ts < $2
         AND CASE
-          WHEN TRIM(s.grado_cm::text) ~ '^\d+$' THEN TRIM(s.grado_cm::text)::integer
+          WHEN TRIM(s.grado_cm::text) ~ '^[0-9]+$' THEN TRIM(s.grado_cm::text)::integer
           ELSE NULL
         END BETWEEN 40 AND 100
       GROUP BY
