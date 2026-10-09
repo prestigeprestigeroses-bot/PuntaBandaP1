@@ -22,6 +22,8 @@ const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
 const path = require("path");
+const crypto = require("crypto");
+const ExcelJS = require("exceljs");
 
 // FORZAR ZONA HORARIA COLOMBIA
 process.env.TZ = "America/Bogota";
@@ -43,10 +45,20 @@ const pool = new Pool({
 // -----------------------------
 const WORKER_MIN = 1;
 const WORKER_MAX = 13;
+const REPORT_PASSWORD = process.env.REPORT_PASSWORD || "P1-INFORME-2026";
+const GRADE_ESTIMATE_PERCENTAGES = [
+  { grado: 40, porcentaje: 10 },
+  { grado: 50, porcentaje: 25 },
+  { grado: 60, porcentaje: 48 },
+  { grado: 70, porcentaje: 10 },
+  { grado: 80, porcentaje: 4 },
+  { grado: 90, porcentaje: 3 },
+];
 
-// Mapa en memoria de nombres de bonchadores (p.ej. { B16: "Juan" })
+// Caché de nombres persistidos en PostgreSQL (p.ej. { B01: "Juan" })
 let workerNameMap = {};
 let scansNameColumnsReady = false;
+let workerNamesTableReady = false;
 
 // Conjunto de clientes SSE conectados
 const clients = new Set();
@@ -62,30 +74,50 @@ app.get("/", (req, res) => {
    RUTAS DE API
    ========================================================== */
 
-// Lista de bonchadores con nombres
-app.get("/api/workers", (req, res) => {
-  const workers = [];
-  for (let i = WORKER_MIN; i <= WORKER_MAX; i++) {
-    const code = `B${String(i).padStart(2, "0")}`;
-    workers.push({ code, name: workerNameMap[code] || code });
+function buildWorkersList() {
+  return Array.from({ length: WORKER_MAX - WORKER_MIN + 1 }, (_, index) => {
+    const workerNumber = WORKER_MIN + index;
+    const code = `B${String(workerNumber).padStart(2, "0")}`;
+    return { code, name: workerNameMap[code] || code };
+  });
+}
+
+// Lista de bonchadores con nombres persistidos
+app.get("/api/workers", async (req, res) => {
+  try {
+    await loadWorkerNames();
+    res.json(buildWorkersList());
+  } catch (err) {
+    console.error("GET /api/workers error:", err);
+    res.status(500).json({ error: "Error cargando bonchadores" });
   }
-  res.json(workers);
 });
 
-// Guardar/actualizar nombre de bonchador (en memoria)
+// Guardar/actualizar nombre de bonchador de forma persistente
 app.post("/api/workers", async (req, res) => {
   try {
     const { code, name } = req.body || {};
     const workerCode = String(code || "").trim().toUpperCase();
 
-    if (!workerCode) {
-      return res.status(400).json({ error: "Falta el código del bonchador" });
+    if (!/^B(?:0[1-9]|1[0-3])$/.test(workerCode)) {
+      return res.status(400).json({ error: "Código de bonchador inválido" });
     }
 
     const workerName = String(name || "").trim() || workerCode;
+    await ensureWorkerNamesTable();
+    await pool.query(
+      `
+      INSERT INTO public.worker_names (code, name, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (code)
+      DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
+      `,
+      [workerCode, workerName]
+    );
     workerNameMap[workerCode] = workerName;
 
     await updateTodayWorkerName(workerCode, workerName);
+    broadcast({ kind: "workers", workers: buildWorkersList() });
 
     res.json({ ok: true, code: workerCode, name: workerName });
   } catch (err) {
@@ -440,6 +472,66 @@ async function ensureScansNameColumns() {
   scansNameColumnsReady = true;
 }
 
+async function ensureWorkerNamesTable() {
+  if (workerNamesTableReady) return;
+
+  await ensureScansNameColumns();
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.worker_names (
+      code character varying(10) PRIMARY KEY,
+      name character varying(120) NOT NULL,
+      updated_at timestamp with time zone NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Conserva los nombres que ya estaban escritos en registros anteriores.
+  await pool.query(`
+    INSERT INTO public.worker_names (code, name)
+    SELECT DISTINCT ON (UPPER(worker))
+      UPPER(worker),
+      TRIM(worker_name)
+    FROM public.scans
+    WHERE worker IS NOT NULL
+      AND worker_name IS NOT NULL
+      AND TRIM(worker_name) <> ''
+      AND UPPER(TRIM(worker_name)) <> UPPER(TRIM(worker))
+    ORDER BY UPPER(worker), ts DESC
+    ON CONFLICT (code) DO NOTHING
+  `);
+
+  workerNamesTableReady = true;
+}
+
+async function loadWorkerNames() {
+  await ensureWorkerNamesTable();
+  const result = await pool.query(`
+    SELECT code, name
+    FROM public.worker_names
+    ORDER BY code
+  `);
+
+  const persistedNames = {};
+  for (const row of result.rows) {
+    const code = String(row.code || "").trim().toUpperCase();
+    const name = String(row.name || "").trim();
+    if (code) persistedNames[code] = name || code;
+  }
+  workerNameMap = persistedNames;
+  return workerNameMap;
+}
+
+async function getPersistedWorkerName(workerCode) {
+  const code = String(workerCode || "").trim().toUpperCase();
+  await ensureWorkerNamesTable();
+  const result = await pool.query(
+    `SELECT name FROM public.worker_names WHERE code = $1 LIMIT 1`,
+    [code]
+  );
+  const name = String(result.rows[0]?.name || "").trim() || code;
+  workerNameMap[code] = name;
+  return name;
+}
+
 async function updateTodayWorkerName(workerCode, workerName) {
   await ensureScansNameColumns();
 
@@ -579,7 +671,7 @@ app.post("/api/scan", async (req, res) => {
 
     lObj.id = laminaDb.id || lObj.id;
 
-    const workerName = workerNameMap[wObj.code] || wObj.code;
+    const workerName = await getPersistedWorkerName(wObj.code);
     const laminaNombre = laminaDb.nombre || lObj.id;
     const fincaValue = (() => {
       const value = String(finca || "").trim().toUpperCase();
@@ -615,6 +707,194 @@ app.post("/api/scan", async (req, res) => {
   } catch (err) {
     console.error("POST /api/scan error:", err);
     res.status(500).json({ error: "Error interno" });
+  }
+});
+
+function secureTextEquals(value, expected) {
+  const left = Buffer.from(String(value || ""), "utf8");
+  const right = Buffer.from(String(expected || ""), "utf8");
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function distributeIntegerTotal(total) {
+  const safeTotal = Math.max(0, Math.trunc(Number(total) || 0));
+  const result = GRADE_ESTIMATE_PERCENTAGES.map((item, index) => {
+    const exact = safeTotal * item.porcentaje / 100;
+    return {
+      ...item,
+      index,
+      cantidad: Math.floor(exact),
+      remainder: exact - Math.floor(exact),
+    };
+  });
+
+  let pending = safeTotal - result.reduce((sum, item) => sum + item.cantidad, 0);
+  const priority = [...result].sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+  for (let i = 0; i < pending; i += 1) priority[i % priority.length].cantidad += 1;
+
+  return result.sort((a, b) => a.index - b.index);
+}
+
+function styleReportHeader(row) {
+  row.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+  row.alignment = { vertical: "middle", horizontal: "center" };
+  row.height = 22;
+}
+
+app.post("/api/reports/grade-estimate", async (req, res) => {
+  try {
+    const dateFrom = String(req.body?.dateFrom || "").trim();
+    const dateTo = String(req.body?.dateTo || "").trim();
+    const password = req.body?.password;
+
+    if (!secureTextEquals(password, REPORT_PASSWORD)) {
+      return res.status(401).json({ error: "Contraseña incorrecta" });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      return res.status(400).json({ error: "Rango de fechas inválido" });
+    }
+
+    const parseLocalDate = (value) => {
+      const [year, month, day] = value.split("-").map(Number);
+      const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
+      return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+        ? parsed
+        : null;
+    };
+    const start = parseLocalDate(dateFrom);
+    const lastDay = parseLocalDate(dateTo);
+    if (!start || !lastDay) {
+      return res.status(400).json({ error: "Rango de fechas inválido" });
+    }
+    if (start > lastDay) {
+      return res.status(400).json({ error: "La fecha inicial no puede ser posterior a la fecha final" });
+    }
+
+    await ensureScansNameColumns();
+
+    const end = new Date(lastDay);
+    end.setDate(end.getDate() + 1);
+
+    const result = await pool.query(
+      `
+      SELECT
+        COALESCE(NULLIF(s.variedad_id, ''), 'SIN CÓDIGO') AS variedad_id,
+        COALESCE(NULLIF(s.variedad_nombre, ''), v.nombre, s.variedad_id, 'SIN VARIEDAD') AS variedad_nombre,
+        COALESCE(NULLIF(s.finca, ''), 'SIN FINCA') AS finca,
+        COUNT(*)::integer AS ramos,
+        COALESCE(SUM(s.tallos), 0)::integer AS tallos
+      FROM scans s
+      LEFT JOIN variedades v ON s.variedad_id = v.id
+      WHERE s.ts >= $1
+        AND s.ts < $2
+        AND CASE
+          WHEN TRIM(s.grado_cm::text) ~ '^\d+$' THEN TRIM(s.grado_cm::text)::integer
+          ELSE NULL
+        END BETWEEN 40 AND 100
+      GROUP BY
+        COALESCE(NULLIF(s.variedad_id, ''), 'SIN CÓDIGO'),
+        COALESCE(NULLIF(s.variedad_nombre, ''), v.nombre, s.variedad_id, 'SIN VARIEDAD'),
+        COALESCE(NULLIF(s.finca, ''), 'SIN FINCA')
+      ORDER BY variedad_nombre, finca
+      `,
+      [start, end]
+    );
+
+    const totalRamos = result.rows.reduce((sum, row) => sum + Number(row.ramos || 0), 0);
+    const totalTallos = result.rows.reduce((sum, row) => sum + Number(row.tallos || 0), 0);
+    const ramosEstimados = distributeIntegerTotal(totalRamos);
+    const tallosEstimados = distributeIntegerTotal(totalTallos);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Punta de Banda P1";
+    workbook.created = new Date();
+
+    const summary = workbook.addWorksheet("Resumen estimado", {
+      views: [{ state: "frozen", ySplit: 8 }]
+    });
+    summary.columns = [
+      { key: "grado", width: 24 },
+      { key: "porcentaje", width: 18 },
+      { key: "ramos", width: 22 },
+      { key: "tallos", width: 22 },
+    ];
+    summary.mergeCells("A1:D1");
+    summary.getCell("A1").value = "INFORME ESTIMADO DE GRADOS DE PROCESO";
+    summary.getCell("A1").font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+    summary.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+    summary.getCell("A1").alignment = { horizontal: "center", vertical: "middle" };
+    summary.getRow(1).height = 30;
+    summary.addRow(["Fecha inicial", dateFrom]);
+    summary.addRow(["Fecha final", dateTo]);
+    summary.addRow(["Ramos normales procesados", totalRamos]);
+    summary.addRow(["Tallos normales procesados", totalTallos]);
+    summary.addRow(["Excluidos", "NACIONAL, BAJAS y NACIONAL GRANEL"]);
+    summary.addRow([]);
+    const header = summary.addRow(["Grado estimado", "Porcentaje", "Ramos estimados", "Tallos estimados"]);
+    styleReportHeader(header);
+
+    ramosEstimados.forEach((item, index) => {
+      const row = summary.addRow([
+        `Grado ${item.grado}`,
+        item.porcentaje / 100,
+        item.cantidad,
+        tallosEstimados[index].cantidad,
+      ]);
+      row.getCell(2).numFmt = "0%";
+      if (index % 2 === 0) {
+        row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+      }
+    });
+    const totalRow = summary.addRow(["TOTAL", 1, totalRamos, totalTallos]);
+    totalRow.font = { bold: true };
+    totalRow.getCell(2).numFmt = "0%";
+    totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
+    summary.addRow([]);
+    summary.addRow(["Nota", "Estimación informativa; no modifica los grados de envío guardados."]);
+
+    const detail = workbook.addWorksheet("Base por variedad", {
+      views: [{ state: "frozen", ySplit: 1 }]
+    });
+    detail.columns = [
+      { header: "Código variedad", key: "variedad_id", width: 18 },
+      { header: "Variedad", key: "variedad_nombre", width: 30 },
+      { header: "Finca", key: "finca", width: 14 },
+      { header: "Ramos incluidos", key: "ramos", width: 20 },
+      { header: "Tallos incluidos", key: "tallos", width: 20 },
+    ];
+    styleReportHeader(detail.getRow(1));
+    result.rows.forEach((row) => detail.addRow({
+      variedad_id: row.variedad_id,
+      variedad_nombre: row.variedad_nombre,
+      finca: row.finca,
+      ramos: Number(row.ramos || 0),
+      tallos: Number(row.tallos || 0),
+    }));
+    detail.autoFilter = "A1:E1";
+
+    [summary, detail].forEach((sheet) => {
+      sheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFD6E0EF" } },
+            left: { style: "thin", color: { argb: "FFD6E0EF" } },
+            bottom: { style: "thin", color: { argb: "FFD6E0EF" } },
+            right: { style: "thin", color: { argb: "FFD6E0EF" } },
+          };
+        });
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `informe_grados_estimados_${dateFrom}_a_${dateTo}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error("POST /api/reports/grade-estimate error:", err);
+    return res.status(500).json({ error: "No se pudo generar el informe" });
   }
 });
 
@@ -696,4 +976,7 @@ app.get("/api/stream", (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor en puerto ${PORT} (Formatos: Bxx-Tyy, Vxx-gg y Lx)`);
+  loadWorkerNames()
+    .then(() => console.log(`Nombres persistentes cargados: ${Object.keys(workerNameMap).length}`))
+    .catch((err) => console.error("No se pudieron precargar los nombres de bonchadores:", err));
 });

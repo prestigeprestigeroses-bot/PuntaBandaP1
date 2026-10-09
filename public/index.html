@@ -607,6 +607,37 @@
 .x6Actions .ghost { width:100%; }
 .x6Actions #btnX6Send { background:#16a34a; border-color:#86efac; color:#fff; }
 .x6Actions #btnX6Remove { display:none; }
+
+.reportAccessButton{
+  width:auto;
+  padding:6px 10px;
+  font-size:11px;
+  color:#9bb0d0;
+  border-color:rgba(155,176,208,.28);
+}
+.reportModal{
+  position:fixed;
+  inset:0;
+  z-index:180;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:rgba(2,6,23,.78);
+  backdrop-filter:blur(6px);
+}
+.reportModal.hidden{display:none}
+.reportDialog{
+  width:min(430px,calc(100vw - 36px));
+  padding:16px;
+  border:1px solid rgba(96,165,250,.65);
+  border-radius:12px;
+  background:linear-gradient(180deg,#0f1b2f,#0c1628);
+  box-shadow:0 18px 50px rgba(0,0,0,.5);
+}
+.reportDialog h3{margin:0;font-size:18px}
+.reportDialogActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.reportDialogActions .primary{background:#047857;border-color:#34d399;color:#fff;font-weight:900}
+.reportDialogStatus{min-height:18px;margin-top:10px}
   
   </style>
 </head>
@@ -870,9 +901,32 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
     </div>
   </div>
 
-  <div style="display:flex;justify-content:flex-end;margin:18px 0 4px;">
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin:18px 0 4px;">
+    <button id="btnOpenGradeReport" class="ghost reportAccessButton" type="button">Informe Excel protegido</button>
     <button id="btnRefresh" class="ghost" type="button" style="width:auto;padding:6px 10px;font-size:11px;">Refrescar</button>
   </div>
+</div>
+
+<div id="gradeReportModal" class="reportModal hidden" role="dialog" aria-modal="true" aria-labelledby="gradeReportTitle">
+  <form id="gradeReportForm" class="reportDialog">
+    <h3 id="gradeReportTitle">Informe estimado de grados</h3>
+    <div class="hint" style="margin-top:6px;">Excluye Nacional, Bajas y Nacional Granel. Genera un archivo Excel sin modificar la base de datos.</div>
+    <div class="row2">
+      <label>Fecha inicial
+        <input id="gradeReportDateFrom" type="date" required />
+      </label>
+      <label>Fecha final
+        <input id="gradeReportDateTo" type="date" required />
+      </label>
+    </div>
+    <label>Contraseña</label>
+    <input id="gradeReportPassword" type="password" autocomplete="current-password" required />
+    <div id="gradeReportStatus" class="hint reportDialogStatus" aria-live="polite"></div>
+    <div class="reportDialogActions">
+      <button id="btnGenerateGradeReport" class="primary" type="submit">Generar Excel</button>
+      <button id="btnCloseGradeReport" class="ghost" type="button">Cancelar</button>
+    </div>
+  </form>
 </div>
 
 <div id="x6Panel" class="x6Panel hidden">
@@ -912,6 +966,15 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
   const scanInput = $("scanInput");
   const lastScanEl = $("lastScan");
   const btnRefresh = $("btnRefresh");
+  const btnOpenGradeReport = $("btnOpenGradeReport");
+  const gradeReportModal = $("gradeReportModal");
+  const gradeReportForm = $("gradeReportForm");
+  const gradeReportDateFrom = $("gradeReportDateFrom");
+  const gradeReportDateTo = $("gradeReportDateTo");
+  const gradeReportPassword = $("gradeReportPassword");
+  const gradeReportStatus = $("gradeReportStatus");
+  const btnGenerateGradeReport = $("btnGenerateGradeReport");
+  const btnCloseGradeReport = $("btnCloseGradeReport");
   const historyDate = $("historyDate");
   const btnViewDate = $("btnViewDate");
   const btnTodayView = $("btnTodayView");
@@ -3187,6 +3250,83 @@ async function submitManualSpecialRecords() {
   }
 }
 
+function openGradeReportModal() {
+  if (!gradeReportModal) return;
+  const defaultDate = selectedHistoryDate || localDateKey();
+  gradeReportDateFrom.value = defaultDate;
+  gradeReportDateTo.value = defaultDate;
+  gradeReportPassword.value = "";
+  gradeReportStatus.textContent = "";
+  gradeReportStatus.style.color = "";
+  gradeReportModal.classList.remove("hidden");
+  suspendAutoFocus = true;
+  setTimeout(() => gradeReportPassword?.focus(), 0);
+}
+
+function closeGradeReportModal() {
+  if (!gradeReportModal) return;
+  gradeReportModal.classList.add("hidden");
+  gradeReportPassword.value = "";
+  suspendAutoFocus = false;
+  focusScanInput();
+}
+
+async function generateGradeEstimateExcel() {
+  const dateFrom = String(gradeReportDateFrom?.value || "").trim();
+  const dateTo = String(gradeReportDateTo?.value || "").trim();
+  const password = String(gradeReportPassword?.value || "");
+
+  if (!dateFrom || !dateTo || !password) {
+    gradeReportStatus.style.color = "#fda4af";
+    gradeReportStatus.textContent = "Seleccione el rango de fechas e ingrese la contraseña.";
+    return;
+  }
+
+  if (dateFrom > dateTo) {
+    gradeReportStatus.style.color = "#fda4af";
+    gradeReportStatus.textContent = "La fecha inicial no puede ser posterior a la fecha final.";
+    return;
+  }
+
+  btnGenerateGradeReport.disabled = true;
+  gradeReportStatus.style.color = "#bfdbfe";
+  gradeReportStatus.textContent = "Generando archivo Excel...";
+
+  try {
+    const res = await fetch(API + "/api/reports/grade-estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dateFrom, dateTo, password })
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "No se pudo generar el informe");
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = match?.[1] || `informe_grados_estimados_${dateFrom}_a_${dateTo}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    gradeReportStatus.style.color = "#86efac";
+    gradeReportStatus.textContent = "Informe Excel generado correctamente.";
+  } catch (err) {
+    gradeReportStatus.style.color = "#fda4af";
+    gradeReportStatus.textContent = err?.message || "No se pudo generar el informe.";
+  } finally {
+    btnGenerateGradeReport.disabled = false;
+  }
+}
+
   function addScanIfNotExists(reg) {
   if (!reg || reg.id == null) return;
 
@@ -3515,6 +3655,17 @@ document.addEventListener("keydown", async (e) => {
   btnRefresh.addEventListener("click", async () => {
     await refreshAll({ replace: true });
     lastScanEl.textContent = "Datos actualizados desde la base de datos";
+  });
+  btnOpenGradeReport?.addEventListener("click", openGradeReportModal);
+  btnCloseGradeReport?.addEventListener("click", closeGradeReportModal);
+  gradeReportForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await generateGradeEstimateExcel();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && gradeReportModal && !gradeReportModal.classList.contains("hidden")) {
+      closeGradeReportModal();
+    }
   });
   btnX6Remove?.addEventListener("click", removeX6PendingRamo);
   btnX6Add?.addEventListener("click", addX6Ramo);
