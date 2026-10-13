@@ -819,8 +819,9 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
       { key: "porcentaje", width: 18 },
       { key: "ramos", width: 22 },
       { key: "tallos", width: 22 },
+      { key: "finca", width: 18 },
     ];
-    summary.mergeCells("A1:D1");
+    summary.mergeCells("A1:E1");
     summary.getCell("A1").value = "INFORME ESTIMADO DE GRADOS DE PROCESO";
     summary.getCell("A1").font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
     summary.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
@@ -853,26 +854,87 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
     summary.addRow([]);
     summary.addRow(["Nota", "Estimación informativa; no modifica los grados de envío guardados."]);
+    summary.addRow([]);
 
-    const detail = workbook.addWorksheet("Base por variedad", {
+    const varietyTitle = summary.addRow(["RESUMEN POR VARIEDAD"]);
+    summary.mergeCells(varietyTitle.number, 1, varietyTitle.number, 5);
+    varietyTitle.font = { bold: true, size: 13, color: { argb: "FFFFFFFF" } };
+    varietyTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+    varietyTitle.alignment = { horizontal: "center", vertical: "middle" };
+    varietyTitle.height = 24;
+
+    const varietyHeader = summary.addRow([
+      "Código variedad",
+      "Variedad",
+      "Finca",
+      "Ramos incluidos",
+      "Tallos incluidos",
+    ]);
+    styleReportHeader(varietyHeader);
+
+    result.rows.forEach((sourceRow, index) => {
+      const row = summary.addRow([
+        sourceRow.variedad_id,
+        sourceRow.variedad_nombre,
+        sourceRow.finca,
+        Number(sourceRow.ramos || 0),
+        Number(sourceRow.tallos || 0),
+      ]);
+      if (index % 2 === 0) {
+        row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+      }
+    });
+
+    const varietyTotalRow = summary.addRow([
+      "TOTAL VARIEDADES",
+      "",
+      "",
+      totalRamos,
+      totalTallos,
+    ]);
+    varietyTotalRow.font = { bold: true };
+    varietyTotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
+
+    const detail = workbook.addWorksheet("Estimado por variedad", {
       views: [{ state: "frozen", ySplit: 1 }]
     });
     detail.columns = [
       { header: "Código variedad", key: "variedad_id", width: 18 },
       { header: "Variedad", key: "variedad_nombre", width: 30 },
       { header: "Finca", key: "finca", width: 14 },
-      { header: "Ramos incluidos", key: "ramos", width: 20 },
-      { header: "Tallos incluidos", key: "tallos", width: 20 },
+      { header: "Ramos base", key: "ramos_base", width: 16 },
+      { header: "Tallos base", key: "tallos_base", width: 16 },
+      { header: "Grado estimado", key: "grado", width: 18 },
+      { header: "Porcentaje", key: "porcentaje", width: 14 },
+      { header: "Ramos estimados", key: "ramos_estimados", width: 20 },
+      { header: "Tallos estimados", key: "tallos_estimados", width: 20 },
     ];
     styleReportHeader(detail.getRow(1));
-    result.rows.forEach((row) => detail.addRow({
-      variedad_id: row.variedad_id,
-      variedad_nombre: row.variedad_nombre,
-      finca: row.finca,
-      ramos: Number(row.ramos || 0),
-      tallos: Number(row.tallos || 0),
-    }));
-    detail.autoFilter = "A1:E1";
+    result.rows.forEach((sourceRow, varietyIndex) => {
+      const ramosBase = Number(sourceRow.ramos || 0);
+      const tallosBase = Number(sourceRow.tallos || 0);
+      const ramosPorGrado = distributeIntegerTotal(ramosBase);
+      const tallosPorGrado = distributeIntegerTotal(tallosBase);
+
+      ramosPorGrado.forEach((gradeRow, gradeIndex) => {
+        const row = detail.addRow({
+          variedad_id: sourceRow.variedad_id,
+          variedad_nombre: sourceRow.variedad_nombre,
+          finca: sourceRow.finca,
+          ramos_base: ramosBase,
+          tallos_base: tallosBase,
+          grado: `Grado ${gradeRow.grado}`,
+          porcentaje: gradeRow.porcentaje / 100,
+          ramos_estimados: gradeRow.cantidad,
+          tallos_estimados: tallosPorGrado[gradeIndex].cantidad,
+        });
+        row.getCell(7).numFmt = "0%";
+        if (varietyIndex % 2 === 0) {
+          row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+        }
+      });
+    });
+    detail.autoFilter = "A1:I1";
 
     [summary, detail].forEach((sheet) => {
       sheet.eachRow((row) => {
