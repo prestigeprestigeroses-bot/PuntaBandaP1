@@ -897,10 +897,11 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
 
     const varietyTotalsMap = new Map();
     result.rows.forEach((sourceRow) => {
-      const key = `${sourceRow.variedad_id}|${sourceRow.variedad_nombre}`;
+      const key = `${sourceRow.variedad_id}|${sourceRow.variedad_nombre}|${sourceRow.finca}`;
       const current = varietyTotalsMap.get(key) || {
         variedad_id: sourceRow.variedad_id,
         variedad_nombre: sourceRow.variedad_nombre,
+        finca: sourceRow.finca,
         tallos: 0,
       };
       current.tallos += Number(sourceRow.tallos || 0);
@@ -909,9 +910,9 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
 
     const matrixGrades = [...GRADE_ESTIMATE_PERCENTAGES].sort((a, b) => b.grado - a.grado);
     const matrix = workbook.addWorksheet("Cuadro por variedad", {
-      views: [{ state: "frozen", xSplit: 1, ySplit: 1 }]
+      views: [{ state: "frozen", xSplit: 2, ySplit: 1 }]
     });
-    const matrixHeaders = ["VARIEDADES"];
+    const matrixHeaders = ["VARIEDADES", "FINCA"];
     matrixGrades.forEach(({ grado }) => {
       matrixHeaders.push(`TALLOS EN ${grado}`, `%${grado}`);
     });
@@ -922,7 +923,8 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     matrixHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     matrixHeader.height = 34;
     matrixHeader.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4B6EF" } };
-    for (let column = 2; column < matrixHeaders.length; column += 1) {
+    matrixHeader.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4B6EF" } };
+    for (let column = 3; column < matrixHeaders.length; column += 1) {
       matrixHeader.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFBDD7EE" } };
     }
     matrixHeader.getCell(matrixHeaders.length).fill = {
@@ -932,7 +934,8 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     };
 
     matrix.getColumn(1).width = 30;
-    for (let column = 2; column < matrixHeaders.length; column += 2) {
+    matrix.getColumn(2).width = 14;
+    for (let column = 3; column < matrixHeaders.length; column += 2) {
       matrix.getColumn(column).width = 16;
       matrix.getColumn(column + 1).width = 11;
     }
@@ -941,12 +944,13 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     const matrixGradeTotals = Object.fromEntries(matrixGrades.map(({ grado }) => [grado, 0]));
     const varietyMatrixRows = [...varietyTotalsMap.values()].sort((a, b) =>
       String(a.variedad_nombre).localeCompare(String(b.variedad_nombre), "es")
+      || String(a.finca).localeCompare(String(b.finca), "es")
     );
 
     varietyMatrixRows.forEach((sourceRow, rowIndex) => {
       const distributed = distributeIntegerTotal(sourceRow.tallos);
       const byGrade = Object.fromEntries(distributed.map((item) => [item.grado, item.cantidad]));
-      const values = [sourceRow.variedad_nombre || sourceRow.variedad_id];
+      const values = [sourceRow.variedad_nombre || sourceRow.variedad_id, sourceRow.finca];
 
       matrixGrades.forEach(({ grado }) => {
         const gradeStems = Number(byGrade[grado] || 0);
@@ -957,7 +961,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
 
       const row = matrix.addRow(values);
       row.alignment = { horizontal: "center", vertical: "middle" };
-      for (let column = 3; column < matrixHeaders.length; column += 2) {
+      for (let column = 4; column < matrixHeaders.length; column += 2) {
         row.getCell(column).numFmt = "0.00%";
       }
       if (rowIndex % 2 === 0) {
@@ -965,7 +969,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
       }
     });
 
-    const matrixTotalValues = ["TOTAL"];
+    const matrixTotalValues = ["TOTAL", "TODAS"];
     matrixGrades.forEach(({ grado }) => {
       const gradeStems = matrixGradeTotals[grado];
       matrixTotalValues.push(gradeStems, totalTallos > 0 ? gradeStems / totalTallos : 0);
@@ -975,7 +979,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     matrixTotalRow.font = { bold: true };
     matrixTotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
     matrixTotalRow.alignment = { horizontal: "center", vertical: "middle" };
-    for (let column = 3; column < matrixHeaders.length; column += 2) {
+    for (let column = 4; column < matrixHeaders.length; column += 2) {
       matrixTotalRow.getCell(column).numFmt = "0.00%";
     }
     matrix.autoFilter = `A1:${matrix.getColumn(matrixHeaders.length).letter}1`;
