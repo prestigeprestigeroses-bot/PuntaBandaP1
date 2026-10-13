@@ -46,13 +46,14 @@ const pool = new Pool({
 const WORKER_MIN = 1;
 const WORKER_MAX = 13;
 const REPORT_PASSWORD = process.env.REPORT_PASSWORD || "P1-INFORME-2026";
+// Pesos base: se varían por variedad/finca y luego se normalizan hasta completar 100%.
 const GRADE_ESTIMATE_PERCENTAGES = [
-  { grado: 40, porcentaje: 10 },
+  { grado: 40, porcentaje: 15 },
   { grado: 50, porcentaje: 25 },
-  { grado: 60, porcentaje: 48 },
+  { grado: 60, porcentaje: 45 },
   { grado: 70, porcentaje: 10 },
-  { grado: 80, porcentaje: 4 },
-  { grado: 90, porcentaje: 3 },
+  { grado: 80, porcentaje: 1 },
+  { grado: 90, porcentaje: 1 },
 ];
 
 // Caché de nombres persistidos en PostgreSQL (p.ej. { B01: "Juan" })
@@ -716,12 +717,45 @@ function secureTextEquals(value, expected) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-function distributeIntegerTotal(total) {
+function seededRandom(seedText) {
+  let seed = 2166136261;
+  for (const char of String(seedText || "")) {
+    seed ^= char.charCodeAt(0);
+    seed = Math.imul(seed, 16777619);
+  }
+
+  return () => {
+    seed += 0x6D2B79F5;
+    let value = seed;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildVarietyGradeProfile(seedText) {
+  const random = seededRandom(seedText);
+  const variedWeights = GRADE_ESTIMATE_PERCENTAGES.map((item) => ({
+    ...item,
+    weight: item.porcentaje * (0.82 + random() * 0.36),
+  }));
+  const totalWeight = variedWeights.reduce((sum, item) => sum + item.weight, 0) || 1;
+
+  return variedWeights.map(({ grado, weight }) => ({
+    grado,
+    porcentaje: weight * 100 / totalWeight,
+  }));
+}
+
+function distributeIntegerTotal(total, profile = GRADE_ESTIMATE_PERCENTAGES) {
   const safeTotal = Math.max(0, Math.trunc(Number(total) || 0));
-  const result = GRADE_ESTIMATE_PERCENTAGES.map((item, index) => {
-    const exact = safeTotal * item.porcentaje / 100;
+  const totalWeight = profile.reduce((sum, item) => sum + Number(item.porcentaje || 0), 0) || 1;
+  const result = profile.map((item, index) => {
+    const normalizedPercentage = Number(item.porcentaje || 0) * 100 / totalWeight;
+    const exact = safeTotal * normalizedPercentage / 100;
     return {
-      ...item,
+      grado: item.grado,
+      porcentaje: normalizedPercentage,
       index,
       cantidad: Math.floor(exact),
       remainder: exact - Math.floor(exact),
@@ -804,8 +838,37 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
 
     const totalRamos = result.rows.reduce((sum, row) => sum + Number(row.ramos || 0), 0);
     const totalTallos = result.rows.reduce((sum, row) => sum + Number(row.tallos || 0), 0);
-    const ramosEstimados = distributeIntegerTotal(totalRamos);
-    const tallosEstimados = distributeIntegerTotal(totalTallos);
+    const estimatedGroups = result.rows.map((sourceRow) => {
+      const ramos = Number(sourceRow.ramos || 0);
+      const tallos = Number(sourceRow.tallos || 0);
+      const seed = `${dateFrom}|${dateTo}|${sourceRow.variedad_id}|${sourceRow.variedad_nombre}|${sourceRow.finca}`;
+      const gradeProfile = buildVarietyGradeProfile(seed);
+      return {
+        ...sourceRow,
+        ramos,
+        tallos,
+        gradeProfile,
+        ramosPorGrado: distributeIntegerTotal(ramos, gradeProfile),
+        tallosPorGrado: distributeIntegerTotal(tallos, gradeProfile),
+      };
+    });
+
+    const ramosTotalsByGrade = Object.fromEntries(GRADE_ESTIMATE_PERCENTAGES.map(({ grado }) => [grado, 0]));
+    const tallosTotalsByGrade = Object.fromEntries(GRADE_ESTIMATE_PERCENTAGES.map(({ grado }) => [grado, 0]));
+    estimatedGroups.forEach((group) => {
+      group.ramosPorGrado.forEach((item) => { ramosTotalsByGrade[item.grado] += item.cantidad; });
+      group.tallosPorGrado.forEach((item) => { tallosTotalsByGrade[item.grado] += item.cantidad; });
+    });
+    const ramosEstimados = GRADE_ESTIMATE_PERCENTAGES.map(({ grado }) => ({
+      grado,
+      porcentaje: totalTallos > 0 ? tallosTotalsByGrade[grado] * 100 / totalTallos : 0,
+      cantidad: ramosTotalsByGrade[grado],
+    }));
+    const tallosEstimados = GRADE_ESTIMATE_PERCENTAGES.map(({ grado }) => ({
+      grado,
+      porcentaje: totalTallos > 0 ? tallosTotalsByGrade[grado] * 100 / totalTallos : 0,
+      cantidad: tallosTotalsByGrade[grado],
+    }));
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Punta de Banda P1";
@@ -833,7 +896,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     summary.addRow(["Tallos normales procesados", totalTallos]);
     summary.addRow(["Excluidos", "NACIONAL, BAJAS y NACIONAL GRANEL"]);
     summary.addRow([]);
-    const header = summary.addRow(["Grado estimado", "Porcentaje", "Ramos estimados", "Tallos estimados"]);
+    const header = summary.addRow(["Grado estimado", "% de tallos", "Ramos estimados", "Tallos estimados"]);
     styleReportHeader(header);
 
     ramosEstimados.forEach((item, index) => {
@@ -843,7 +906,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
         item.cantidad,
         tallosEstimados[index].cantidad,
       ]);
-      row.getCell(2).numFmt = "0%";
+      row.getCell(2).numFmt = "0.00%";
       if (index % 2 === 0) {
         row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
       }
@@ -853,7 +916,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     totalRow.getCell(2).numFmt = "0%";
     totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
     summary.addRow([]);
-    summary.addRow(["Nota", "Estimación informativa; no modifica los grados de envío guardados."]);
+    summary.addRow(["Nota", "Distribución variable por variedad y finca; es estable para el mismo rango de fechas y no modifica la base de datos."]);
     summary.addRow([]);
 
     const varietyTitle = summary.addRow(["RESUMEN POR VARIEDAD"]);
@@ -872,13 +935,13 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     ]);
     styleReportHeader(varietyHeader);
 
-    result.rows.forEach((sourceRow, index) => {
+    estimatedGroups.forEach((sourceRow, index) => {
       const row = summary.addRow([
         sourceRow.variedad_id,
         sourceRow.variedad_nombre,
         sourceRow.finca,
-        Number(sourceRow.ramos || 0),
-        Number(sourceRow.tallos || 0),
+        sourceRow.ramos,
+        sourceRow.tallos,
       ]);
       if (index % 2 === 0) {
         row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
@@ -894,19 +957,6 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     ]);
     varietyTotalRow.font = { bold: true };
     varietyTotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
-
-    const varietyTotalsMap = new Map();
-    result.rows.forEach((sourceRow) => {
-      const key = `${sourceRow.variedad_id}|${sourceRow.variedad_nombre}|${sourceRow.finca}`;
-      const current = varietyTotalsMap.get(key) || {
-        variedad_id: sourceRow.variedad_id,
-        variedad_nombre: sourceRow.variedad_nombre,
-        finca: sourceRow.finca,
-        tallos: 0,
-      };
-      current.tallos += Number(sourceRow.tallos || 0);
-      varietyTotalsMap.set(key, current);
-    });
 
     const matrixGrades = [...GRADE_ESTIMATE_PERCENTAGES].sort((a, b) => b.grado - a.grado);
     const matrix = workbook.addWorksheet("Cuadro por variedad", {
@@ -942,13 +992,13 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     matrix.getColumn(matrixHeaders.length).width = 18;
 
     const matrixGradeTotals = Object.fromEntries(matrixGrades.map(({ grado }) => [grado, 0]));
-    const varietyMatrixRows = [...varietyTotalsMap.values()].sort((a, b) =>
+    const varietyMatrixRows = [...estimatedGroups].sort((a, b) =>
       String(a.variedad_nombre).localeCompare(String(b.variedad_nombre), "es")
       || String(a.finca).localeCompare(String(b.finca), "es")
     );
 
     varietyMatrixRows.forEach((sourceRow, rowIndex) => {
-      const distributed = distributeIntegerTotal(sourceRow.tallos);
+      const distributed = sourceRow.tallosPorGrado;
       const byGrade = Object.fromEntries(distributed.map((item) => [item.grado, item.cantidad]));
       const values = [sourceRow.variedad_nombre || sourceRow.variedad_id, sourceRow.finca];
 
@@ -999,11 +1049,11 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
       { header: "Tallos estimados", key: "tallos_estimados", width: 20 },
     ];
     styleReportHeader(detail.getRow(1));
-    result.rows.forEach((sourceRow, varietyIndex) => {
-      const ramosBase = Number(sourceRow.ramos || 0);
-      const tallosBase = Number(sourceRow.tallos || 0);
-      const ramosPorGrado = distributeIntegerTotal(ramosBase);
-      const tallosPorGrado = distributeIntegerTotal(tallosBase);
+    estimatedGroups.forEach((sourceRow, varietyIndex) => {
+      const ramosBase = sourceRow.ramos;
+      const tallosBase = sourceRow.tallos;
+      const ramosPorGrado = sourceRow.ramosPorGrado;
+      const tallosPorGrado = sourceRow.tallosPorGrado;
 
       ramosPorGrado.forEach((gradeRow, gradeIndex) => {
         const row = detail.addRow({
@@ -1013,11 +1063,11 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
           ramos_base: ramosBase,
           tallos_base: tallosBase,
           grado: `Grado ${gradeRow.grado}`,
-          porcentaje: gradeRow.porcentaje / 100,
+          porcentaje: tallosBase > 0 ? tallosPorGrado[gradeIndex].cantidad / tallosBase : 0,
           ramos_estimados: gradeRow.cantidad,
           tallos_estimados: tallosPorGrado[gradeIndex].cantidad,
         });
-        row.getCell(7).numFmt = "0%";
+        row.getCell(7).numFmt = "0.00%";
         if (varietyIndex % 2 === 0) {
           row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
         }
