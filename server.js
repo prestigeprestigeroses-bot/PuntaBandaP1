@@ -895,6 +895,91 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     varietyTotalRow.font = { bold: true };
     varietyTotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
 
+    const varietyTotalsMap = new Map();
+    result.rows.forEach((sourceRow) => {
+      const key = `${sourceRow.variedad_id}|${sourceRow.variedad_nombre}`;
+      const current = varietyTotalsMap.get(key) || {
+        variedad_id: sourceRow.variedad_id,
+        variedad_nombre: sourceRow.variedad_nombre,
+        tallos: 0,
+      };
+      current.tallos += Number(sourceRow.tallos || 0);
+      varietyTotalsMap.set(key, current);
+    });
+
+    const matrixGrades = [...GRADE_ESTIMATE_PERCENTAGES].sort((a, b) => b.grado - a.grado);
+    const matrix = workbook.addWorksheet("Cuadro por variedad", {
+      views: [{ state: "frozen", xSplit: 1, ySplit: 1 }]
+    });
+    const matrixHeaders = ["VARIEDADES"];
+    matrixGrades.forEach(({ grado }) => {
+      matrixHeaders.push(`TALLOS EN ${grado}`, `%${grado}`);
+    });
+    matrixHeaders.push("TOTAL TALLOS");
+
+    const matrixHeader = matrix.addRow(matrixHeaders);
+    matrixHeader.font = { bold: true, color: { argb: "FF111827" } };
+    matrixHeader.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    matrixHeader.height = 34;
+    matrixHeader.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF4B6EF" } };
+    for (let column = 2; column < matrixHeaders.length; column += 1) {
+      matrixHeader.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFBDD7EE" } };
+    }
+    matrixHeader.getCell(matrixHeaders.length).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFC6E0B4" },
+    };
+
+    matrix.getColumn(1).width = 30;
+    for (let column = 2; column < matrixHeaders.length; column += 2) {
+      matrix.getColumn(column).width = 16;
+      matrix.getColumn(column + 1).width = 11;
+    }
+    matrix.getColumn(matrixHeaders.length).width = 18;
+
+    const matrixGradeTotals = Object.fromEntries(matrixGrades.map(({ grado }) => [grado, 0]));
+    const varietyMatrixRows = [...varietyTotalsMap.values()].sort((a, b) =>
+      String(a.variedad_nombre).localeCompare(String(b.variedad_nombre), "es")
+    );
+
+    varietyMatrixRows.forEach((sourceRow, rowIndex) => {
+      const distributed = distributeIntegerTotal(sourceRow.tallos);
+      const byGrade = Object.fromEntries(distributed.map((item) => [item.grado, item.cantidad]));
+      const values = [sourceRow.variedad_nombre || sourceRow.variedad_id];
+
+      matrixGrades.forEach(({ grado }) => {
+        const gradeStems = Number(byGrade[grado] || 0);
+        matrixGradeTotals[grado] += gradeStems;
+        values.push(gradeStems, sourceRow.tallos > 0 ? gradeStems / sourceRow.tallos : 0);
+      });
+      values.push(sourceRow.tallos);
+
+      const row = matrix.addRow(values);
+      row.alignment = { horizontal: "center", vertical: "middle" };
+      for (let column = 3; column < matrixHeaders.length; column += 2) {
+        row.getCell(column).numFmt = "0.00%";
+      }
+      if (rowIndex % 2 === 0) {
+        row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+      }
+    });
+
+    const matrixTotalValues = ["TOTAL"];
+    matrixGrades.forEach(({ grado }) => {
+      const gradeStems = matrixGradeTotals[grado];
+      matrixTotalValues.push(gradeStems, totalTallos > 0 ? gradeStems / totalTallos : 0);
+    });
+    matrixTotalValues.push(totalTallos);
+    const matrixTotalRow = matrix.addRow(matrixTotalValues);
+    matrixTotalRow.font = { bold: true };
+    matrixTotalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
+    matrixTotalRow.alignment = { horizontal: "center", vertical: "middle" };
+    for (let column = 3; column < matrixHeaders.length; column += 2) {
+      matrixTotalRow.getCell(column).numFmt = "0.00%";
+    }
+    matrix.autoFilter = `A1:${matrix.getColumn(matrixHeaders.length).letter}1`;
+
     const detail = workbook.addWorksheet("Estimado por variedad", {
       views: [{ state: "frozen", ySplit: 1 }]
     });
@@ -936,7 +1021,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     });
     detail.autoFilter = "A1:I1";
 
-    [summary, detail].forEach((sheet) => {
+    [summary, matrix, detail].forEach((sheet) => {
       sheet.eachRow((row) => {
         row.eachCell((cell) => {
           cell.border = {
