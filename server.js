@@ -603,6 +603,179 @@ async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, lami
   }
 }
 
+async function saveHistoricalScansBatch(
+  wObj,
+  vObj,
+  gObj,
+  lObj,
+  variedadNombre,
+  workerName,
+  laminaNombre,
+  finca,
+  timestamp,
+  quantity
+) {
+  await ensureScansNameColumns();
+
+  const result = await pool.query(
+    `
+    INSERT INTO scans (
+      ts,
+      worker,
+      worker_name,
+      tallos,
+      variedad_id,
+      variedad_nombre,
+      grado_cm,
+      raw_a,
+      raw_b,
+      lamina_id,
+      lamina_nombre,
+      finca
+    )
+    SELECT
+      $1::timestamptz + (serie.numero * INTERVAL '1 millisecond'),
+      $2,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      $8,
+      $9,
+      $10,
+      $11,
+      $12
+    FROM generate_series(0, $13::integer - 1) AS serie(numero)
+    RETURNING *
+    `,
+    [
+      timestamp,
+      wObj.code,
+      workerName,
+      wObj.tallos,
+      vObj.variedad_id,
+      variedadNombre,
+      gObj.grado_cm,
+      wObj.raw,
+      `${vObj.raw}-${gObj.raw}`,
+      lObj.id,
+      laminaNombre,
+      finca,
+      quantity,
+    ]
+  );
+
+  return result.rows;
+}
+
+function parseHistoricalTimestamp(dateValue, timeValue) {
+  const dateMatch = String(dateValue || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const timeMatch = String(timeValue || "12:00").trim().match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!dateMatch || !timeMatch) return null;
+
+  const [, yearText, monthText, dayText] = dateMatch;
+  const [, hourText, minuteText, secondText = "0"] = timeMatch;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const timestamp = new Date(year, month - 1, day, hour, minute, second, 0);
+
+  if (
+    timestamp.getFullYear() !== year
+    || timestamp.getMonth() !== month - 1
+    || timestamp.getDate() !== day
+    || timestamp.getHours() !== hour
+    || timestamp.getMinutes() !== minute
+    || timestamp.getSeconds() !== second
+  ) return null;
+
+  return timestamp;
+}
+
+app.post("/api/manual-records", async (req, res) => {
+  try {
+    const { date, time, worker, tallos, variedad, grado, lamina, finca, quantity } = req.body || {};
+    const workerCode = String(worker || "").trim().toUpperCase().replace(/-T\d+$/, "");
+    const stems = Number(tallos);
+    const amount = Number(quantity);
+    const wObj = parseWorker(`${workerCode}-T${stems}`);
+    const vObj = parseVariedad(variedad);
+    const gObj = parseGrado(grado);
+    const lObj = parseLamina(lamina);
+    const fincaValue = String(finca || "").trim().toUpperCase();
+    const timestamp = parseHistoricalTimestamp(date, time);
+
+    if (!timestamp) {
+      return res.status(400).json({ error: "Fecha u hora inválida" });
+    }
+    if (!wObj) {
+      return res.status(400).json({ error: "Bonchador o cantidad de tallos inválida" });
+    }
+    if (!vObj) {
+      return res.status(400).json({ error: "Variedad inválida. Formato esperado: V01" });
+    }
+    if (!gObj) {
+      return res.status(400).json({ error: "Grado inválido" });
+    }
+    if (!lObj) {
+      return res.status(400).json({ error: "Lámina inválida" });
+    }
+    if (!/^(P1|P2)$/.test(fincaValue)) {
+      return res.status(400).json({ error: "Finca inválida" });
+    }
+    if (!Number.isInteger(amount) || amount < 1 || amount > 500) {
+      return res.status(400).json({ error: "La cantidad de registros debe estar entre 1 y 500" });
+    }
+
+    const [variedadDb, laminaDb, workerName] = await Promise.all([
+      getVariedadById(vObj.variedad_id),
+      getLaminaActiva(lObj.id),
+      getPersistedWorkerName(wObj.code),
+    ]);
+    if (!variedadDb) {
+      return res.status(400).json({ error: `La variedad ${vObj.variedad_id} no existe` });
+    }
+    if (!laminaDb) {
+      return res.status(400).json({ error: `La lámina ${lObj.id} no existe` });
+    }
+    if (laminaDb.invalida) {
+      return res.status(400).json({ error: `La lámina ${lObj.id} está inactiva` });
+    }
+
+    lObj.id = laminaDb.id || lObj.id;
+    const savedRows = await saveHistoricalScansBatch(
+      wObj,
+      vObj,
+      gObj,
+      lObj,
+      variedadDb.nombre || vObj.variedad_id,
+      workerName,
+      laminaDb.nombre || lObj.id,
+      fincaValue,
+      timestamp,
+      amount
+    );
+
+    const regs = savedRows.map((row) => ({
+      ...row,
+      variedad_nombre: row.variedad_nombre || variedadDb.nombre || vObj.variedad_id,
+      worker_name: row.worker_name || workerName,
+      lamina_nombre: row.lamina_nombre || laminaDb.nombre || lObj.id,
+      finca: row.finca || fincaValue,
+    }));
+    regs.forEach((reg) => broadcast({ kind: "scan", reg }));
+
+    return res.json({ ok: true, count: regs.length, regs });
+  } catch (err) {
+    console.error("POST /api/manual-records error:", err);
+    return res.status(500).json({ error: "No se pudieron guardar los registros manuales" });
+  }
+});
+
 /* ==========================================================
    ESCANEO PRINCIPAL
    Espera:

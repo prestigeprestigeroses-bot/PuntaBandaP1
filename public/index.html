@@ -501,13 +501,47 @@
     .specialGradeTotal.bajas{border-color:#fb7185;box-shadow:inset 3px 0 0 #fb7185}
     .specialGradeTotal.granel{border-color:#a78bfa;box-shadow:inset 3px 0 0 #a78bfa}
     .manualLaminaHint{display:block;margin-top:4px;color:#86efac;font-size:11px;font-weight:800}
+    .historicalEntrySection{
+      margin-top:14px;
+      width:30px;
+      border:0;
+      border-radius:9px;
+      background:transparent;
+      overflow:visible;
+    }
+    .historicalEntrySection > summary{
+      width:30px;
+      min-height:28px;
+      padding:5px 7px;
+      color:#8294b2;
+      font-size:0;
+      cursor:pointer;
+      user-select:none;
+      border:1px solid rgba(71,85,105,.3);
+      border-radius:8px;
+      background:rgba(8,15,28,.3);
+    }
+    .historicalEntrySection > summary::marker{font-size:13px}
+    .historicalEntryLabel{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .historicalEntrySection[open]{width:100%;border:1px solid rgba(245,158,11,.55);background:rgba(8,15,28,.55);box-shadow:inset 3px 0 0 #f59e0b;overflow:hidden}
+    .historicalEntrySection[open] > summary{color:#fde68a;background:rgba(120,53,15,.18);border:0;border-radius:0}
+    .historicalEntryBody{padding:12px;border-top:1px solid rgba(71,85,105,.35)}
+    .historicalEntryForm{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+    .historicalEntryForm label{margin:0}
+    .historicalEntryForm .full{grid-column:1 / -1}
+    .historicalEntryForm button{background:#b45309;border-color:#fbbf24;color:#fff;font-weight:900}
+    .historicalEntryForm button:disabled{opacity:.55;cursor:wait}
+    .historicalEntryStatus{min-height:18px;margin-top:8px}
     @media(max-width:850px){
       .manualSpecialGrid{grid-template-columns:1fr}
+      .historicalEntryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media(max-width:520px){
       .manualSpecialForm{grid-template-columns:1fr}
       .manualSpecialForm .full{grid-column:auto}
       .specialGradeTotals{grid-template-columns:1fr}
+      .historicalEntryForm{grid-template-columns:1fr}
+      .historicalEntryForm .full{grid-column:auto}
     }
     .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     .legItem{display:flex;gap:8px;align-items:center;border:1px solid rgba(31,51,88,.7);border-radius:999px;padding:6px 10px;background:rgba(10,18,32,.25)}
@@ -905,6 +939,61 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
     <button id="btnOpenGradeReport" class="ghost reportAccessButton" type="button">Informe Excel protegido</button>
     <button id="btnRefresh" class="ghost" type="button" style="width:auto;padding:6px 10px;font-size:11px;">Refrescar</button>
   </div>
+
+  <details id="historicalEntrySection" class="historicalEntrySection">
+    <summary title="Administración: ingresar registros en otra fecha" aria-label="Administración: ingresar registros en otra fecha">
+      <span class="historicalEntryLabel">Administración: ingresar registros en otra fecha</span>
+    </summary>
+    <div class="historicalEntryBody">
+      <div class="hint" style="margin-bottom:10px;color:#fde68a;">Los registros se guardarán directamente en la fecha seleccionada.</div>
+      <form id="historicalEntryForm" class="historicalEntryForm">
+        <label>Fecha
+          <input id="historicalEntryDate" type="date" required />
+        </label>
+        <label>Hora
+          <input id="historicalEntryTime" type="time" step="1" required />
+        </label>
+        <label>Bonchador
+          <select id="historicalEntryWorker" required></select>
+        </label>
+        <label>Tallos por ramo
+          <input id="historicalEntryStems" type="number" min="1" max="999" step="1" value="25" required />
+        </label>
+        <label>Variedad
+          <input id="historicalEntryVariety" class="mono" list="manualSpecialVarieties" placeholder="V01" maxlength="3" required />
+        </label>
+        <label>Grado
+          <select id="historicalEntryGrade" required>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="60" selected>60</option>
+            <option value="70">70</option>
+            <option value="80">80</option>
+            <option value="90">90</option>
+            <option value="100">100</option>
+            <option value="NACIONAL">NACIONAL</option>
+            <option value="BAJAS">BAJAS</option>
+            <option value="NACIONAL GRANEL">NACIONAL GRANEL</option>
+            <option value="ELITE">ELITE</option>
+          </select>
+        </label>
+        <label>Lámina
+          <input id="historicalEntryLamina" class="mono" list="manualSpecialLaminas" placeholder="L4" value="L4" required />
+        </label>
+        <label>Finca
+          <select id="historicalEntryFinca" required>
+            <option value="P1" selected>P1</option>
+            <option value="P2">P2</option>
+          </select>
+        </label>
+        <label>Cantidad de registros
+          <input id="historicalEntryQuantity" type="number" min="1" max="500" step="1" value="1" required />
+        </label>
+        <button id="historicalEntrySubmit" class="full" type="submit">Guardar registros en la fecha seleccionada</button>
+      </form>
+      <div id="historicalEntryStatus" class="hint historicalEntryStatus" aria-live="polite"></div>
+    </div>
+  </details>
 </div>
 
 <div id="gradeReportModal" class="reportModal hidden" role="dialog" aria-modal="true" aria-labelledby="gradeReportTitle">
@@ -1015,6 +1104,19 @@ const tbVariedad = $("tbVariedad");
   const manualSpecialStatus = $("manualSpecialStatus");
   const manualSpecialVarieties = $("manualSpecialVarieties");
   const manualSpecialLaminas = $("manualSpecialLaminas");
+  const historicalEntrySection = $("historicalEntrySection");
+  const historicalEntryForm = $("historicalEntryForm");
+  const historicalEntryDate = $("historicalEntryDate");
+  const historicalEntryTime = $("historicalEntryTime");
+  const historicalEntryWorker = $("historicalEntryWorker");
+  const historicalEntryStems = $("historicalEntryStems");
+  const historicalEntryVariety = $("historicalEntryVariety");
+  const historicalEntryGrade = $("historicalEntryGrade");
+  const historicalEntryLamina = $("historicalEntryLamina");
+  const historicalEntryFinca = $("historicalEntryFinca");
+  const historicalEntryQuantity = $("historicalEntryQuantity");
+  const historicalEntrySubmit = $("historicalEntrySubmit");
+  const historicalEntryStatus = $("historicalEntryStatus");
   const scanProgressBox = $("scanProgressBox");
 const stepWorker = $("stepWorker");
 const stepVariedad = $("stepVariedad");
@@ -2341,6 +2443,33 @@ function populateManualSpecialOptions() {
       })
       .join("");
   }
+
+  if (historicalEntryWorker) {
+    const currentWorker = historicalEntryWorker.value;
+    historicalEntryWorker.innerHTML = workers.map(code => {
+      const name = workerNameMap[code] || code;
+      return `<option value="${escapeHtml(code)}">${escapeHtml(code)} - ${escapeHtml(name)}</option>`;
+    }).join("");
+    historicalEntryWorker.value = workers.includes(currentWorker)
+      ? currentWorker
+      : (workers.includes("B01") ? "B01" : (workers[0] || ""));
+  }
+}
+
+function setHistoricalEntryDefaults(force = false) {
+  const now = new Date();
+  const timeValue = [
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join(":");
+
+  if (historicalEntryDate && (force || !historicalEntryDate.value)) {
+    historicalEntryDate.value = selectedHistoryDate || localDateKey(now);
+  }
+  if (historicalEntryTime && (force || !historicalEntryTime.value)) {
+    historicalEntryTime.value = timeValue;
+  }
 }
 
 function syncManualSpecialLamina() {
@@ -3250,6 +3379,84 @@ async function submitManualSpecialRecords() {
   }
 }
 
+async function submitHistoricalRecords() {
+  const date = String(historicalEntryDate?.value || "").trim();
+  const time = String(historicalEntryTime?.value || "").trim();
+  const worker = String(historicalEntryWorker?.value || "").trim().toUpperCase();
+  const stems = Number(historicalEntryStems?.value);
+  const variety = String(historicalEntryVariety?.value || "").trim().toUpperCase();
+  const grade = String(historicalEntryGrade?.value || "").trim().toUpperCase();
+  const lamina = String(historicalEntryLamina?.value || "").trim().toUpperCase();
+  const finca = String(historicalEntryFinca?.value || "").trim().toUpperCase();
+  const quantity = Number(historicalEntryQuantity?.value);
+
+  const workerObj = parseBonchador(`${worker}-T${stems}`);
+  const varietyObj = parseV(variety);
+  const gradeObj = parseG(grade);
+  const laminaObj = parseL(lamina);
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const validTime = /^\d{2}:\d{2}(?::\d{2})?$/.test(time);
+
+  if (!validDate || !validTime || !workerObj || !varietyObj || !gradeObj || !laminaObj || !/^(P1|P2)$/.test(finca) || !Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+    historicalEntryStatus.style.color = "#fda4af";
+    historicalEntryStatus.textContent = "Revise fecha, hora, bonchador, tallos, variedad, grado, lámina, finca y cantidad.";
+    return;
+  }
+
+  const workerLabel = workerNameMap[worker] && workerNameMap[worker] !== worker
+    ? `${worker} - ${workerNameMap[worker]}`
+    : worker;
+  const varietyLabel = variedadNameMap[variety] && variedadNameMap[variety] !== variety
+    ? `${variety} - ${variedadNameMap[variety]}`
+    : variety;
+  const confirmed = window.confirm(
+    `Se guardarán ${quantity} registro(s) el ${date} a las ${time}.\n\n`
+    + `${workerLabel} | ${stems} tallos | ${varietyLabel} | Grado ${gradeObj.grado} | ${laminaObj.id} | ${finca}\n\n`
+    + "¿Desea continuar?"
+  );
+  if (!confirmed) return;
+
+  historicalEntrySubmit.disabled = true;
+  historicalEntryStatus.style.color = "#fde68a";
+  historicalEntryStatus.textContent = `Guardando ${quantity} registro(s) en ${date}...`;
+  suspendAutoFocus = true;
+
+  try {
+    const res = await fetch(API + "/api/manual-records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date,
+        time,
+        worker,
+        tallos: stems,
+        variedad: variety,
+        grado: gradeObj.raw,
+        lamina: laminaObj.raw,
+        finca,
+        quantity,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "No se pudieron guardar los registros");
+
+    const visibleDate = selectedHistoryDate || localDateKey();
+    if (date === visibleDate) {
+      await refreshAll({ replace: true });
+    }
+
+    historicalEntryStatus.style.color = "#86efac";
+    historicalEntryStatus.textContent = `${data.count || quantity} registro(s) guardados correctamente en ${date}.`;
+    historicalEntryQuantity.value = "1";
+  } catch (err) {
+    historicalEntryStatus.style.color = "#fda4af";
+    historicalEntryStatus.textContent = err?.message || "No se pudieron guardar los registros.";
+  } finally {
+    historicalEntrySubmit.disabled = false;
+    suspendAutoFocus = !!historicalEntrySection?.open;
+  }
+}
+
 function openGradeReportModal() {
   if (!gradeReportModal) return;
   const defaultDate = selectedHistoryDate || localDateKey();
@@ -3638,6 +3845,19 @@ document.addEventListener("keydown", async (e) => {
   manualSpecialForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     await submitManualSpecialRecords();
+  });
+  historicalEntrySection?.addEventListener("toggle", () => {
+    if (historicalEntrySection.open) {
+      setHistoricalEntryDefaults();
+      suspendAutoFocus = true;
+    } else {
+      suspendAutoFocus = false;
+      focusScanInput();
+    }
+  });
+  historicalEntryForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await submitHistoricalRecords();
   });
   document.addEventListener("keydown", (e) => { if (e.key === "F9") focusScan(); });
 
@@ -4038,6 +4258,7 @@ window.addEventListener("pageshow", activarEscaneoInicial);
 
 (async () => {
   selectedHistoryDate = localDateKey();
+  setHistoricalEntryDefaults(true);
   updateHistoryModeUI();
   activarEscaneoInicial();
 
