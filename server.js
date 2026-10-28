@@ -1272,6 +1272,49 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
   }
 });
 
+app.post("/api/scans/delete-batch", async (req, res) => {
+  try {
+    const date = String(req.body?.date || "").trim();
+    const worker = String(req.body?.worker || "").trim().toUpperCase();
+    const requestedIds = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const ids = [...new Set(requestedIds.map((id) => String(id).trim()))]
+      .filter((id) => /^\d+$/.test(id));
+
+    if (!/^B(?:0[1-9]|1[0-3])$/.test(worker)) {
+      return res.status(400).json({ error: "Bonchador inválido" });
+    }
+    if (ids.length < 1 || ids.length > 1000 || ids.length !== requestedIds.length) {
+      return res.status(400).json({ error: "Seleccione entre 1 y 1000 registros válidos" });
+    }
+
+    const start = parseHistoricalTimestamp(date, "00:00:00");
+    if (!start) {
+      return res.status(400).json({ error: "Fecha inválida" });
+    }
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const result = await pool.query(
+      `
+      DELETE FROM scans
+      WHERE id = ANY($1::bigint[])
+        AND UPPER(worker) = $2
+        AND ts >= $3
+        AND ts < $4
+      RETURNING id
+      `,
+      [ids, worker, start, end]
+    );
+
+    const deletedIds = result.rows.map((row) => String(row.id));
+    deletedIds.forEach((id) => broadcast({ kind: "delete", id }));
+    return res.json({ ok: true, count: deletedIds.length, ids: deletedIds });
+  } catch (err) {
+    console.error("POST /api/scans/delete-batch error:", err);
+    return res.status(500).json({ error: "No se pudieron eliminar los registros seleccionados" });
+  }
+});
+
 app.delete("/api/scans/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);

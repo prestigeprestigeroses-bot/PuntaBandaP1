@@ -532,9 +532,25 @@
     .historicalEntryForm button{background:#b45309;border-color:#fbbf24;color:#fff;font-weight:900}
     .historicalEntryForm button:disabled{opacity:.55;cursor:wait}
     .historicalEntryStatus{min-height:18px;margin-top:8px}
+    .recordRemovalSection{margin-top:6px}
+    .recordRemovalSection[open]{border-color:rgba(244,63,94,.6);box-shadow:inset 3px 0 0 #f43f5e}
+    .recordRemovalSection[open] > summary{color:#fecdd3;background:rgba(136,19,55,.18)}
+    .recordRemovalControls{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end}
+    .recordRemovalControls label{margin:0}
+    .recordRemovalControls button{width:auto;min-width:150px}
+    .recordRemovalActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 8px}
+    .recordRemovalActions button{width:auto;padding:7px 11px}
+    .recordRemovalActions .danger{background:#b91c1c;border-color:#fb7185;color:#fff;font-weight:900}
+    .recordRemovalList{max-height:360px;overflow:auto;border:1px solid rgba(71,85,105,.45);border-radius:9px}
+    .recordRemovalList table{font-size:12px}
+    .recordRemovalList th,.recordRemovalList td{text-align:left;white-space:nowrap}
+    .recordRemovalList input[type="checkbox"]{width:18px;height:18px;accent-color:#ef4444}
+    .recordRemovalEmpty{padding:20px;text-align:center;color:var(--muted)}
     @media(max-width:850px){
       .manualSpecialGrid{grid-template-columns:1fr}
       .historicalEntryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .recordRemovalControls{grid-template-columns:1fr 1fr}
+      .recordRemovalControls button{grid-column:1 / -1;width:100%}
     }
     @media(max-width:520px){
       .manualSpecialForm{grid-template-columns:1fr}
@@ -542,6 +558,8 @@
       .specialGradeTotals{grid-template-columns:1fr}
       .historicalEntryForm{grid-template-columns:1fr}
       .historicalEntryForm .full{grid-column:auto}
+      .recordRemovalControls{grid-template-columns:1fr}
+      .recordRemovalControls button{grid-column:auto}
     }
     .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
     .legItem{display:flex;gap:8px;align-items:center;border:1px solid rgba(31,51,88,.7);border-radius:999px;padding:6px 10px;background:rgba(10,18,32,.25)}
@@ -994,6 +1012,49 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
       <div id="historicalEntryStatus" class="hint historicalEntryStatus" aria-live="polite"></div>
     </div>
   </details>
+
+  <details id="recordRemovalSection" class="historicalEntrySection recordRemovalSection">
+    <summary title="Administración: quitar registros de un bonchador por fecha" aria-label="Administración: quitar registros de un bonchador por fecha">
+      <span class="historicalEntryLabel">Administración: quitar registros de un bonchador por fecha</span>
+    </summary>
+    <div class="historicalEntryBody">
+      <div class="hint" style="margin-bottom:10px;color:#fecdd3;">Seleccione el día y el bonchador; después marque únicamente los registros que desea eliminar.</div>
+      <div class="recordRemovalControls">
+        <label>Fecha
+          <input id="recordRemovalDate" type="date" required />
+        </label>
+        <label>Bonchador
+          <select id="recordRemovalWorker" required></select>
+        </label>
+        <button id="recordRemovalLoad" class="ghost" type="button">Cargar registros</button>
+      </div>
+      <div class="recordRemovalActions">
+        <button id="recordRemovalSelectAll" class="ghost" type="button">Marcar todos</button>
+        <button id="recordRemovalClear" class="ghost" type="button">Quitar selección</button>
+        <button id="recordRemovalDelete" class="danger" type="button" disabled>Eliminar seleccionados</button>
+        <span id="recordRemovalCount" class="hint">0 seleccionados</span>
+      </div>
+      <div class="recordRemovalList">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Hora</th>
+              <th>Tallos</th>
+              <th>Variedad</th>
+              <th>Grado</th>
+              <th>Lámina</th>
+              <th>Finca</th>
+            </tr>
+          </thead>
+          <tbody id="recordRemovalRows">
+            <tr><td colspan="7" class="recordRemovalEmpty">Seleccione fecha y bonchador para cargar registros.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="recordRemovalStatus" class="hint historicalEntryStatus" aria-live="polite"></div>
+    </div>
+  </details>
 </div>
 
 <div id="gradeReportModal" class="reportModal hidden" role="dialog" aria-modal="true" aria-labelledby="gradeReportTitle">
@@ -1117,6 +1178,16 @@ const tbVariedad = $("tbVariedad");
   const historicalEntryQuantity = $("historicalEntryQuantity");
   const historicalEntrySubmit = $("historicalEntrySubmit");
   const historicalEntryStatus = $("historicalEntryStatus");
+  const recordRemovalSection = $("recordRemovalSection");
+  const recordRemovalDate = $("recordRemovalDate");
+  const recordRemovalWorker = $("recordRemovalWorker");
+  const recordRemovalLoad = $("recordRemovalLoad");
+  const recordRemovalSelectAll = $("recordRemovalSelectAll");
+  const recordRemovalClear = $("recordRemovalClear");
+  const recordRemovalDelete = $("recordRemovalDelete");
+  const recordRemovalCount = $("recordRemovalCount");
+  const recordRemovalRows = $("recordRemovalRows");
+  const recordRemovalStatus = $("recordRemovalStatus");
   const scanProgressBox = $("scanProgressBox");
 const stepWorker = $("stepWorker");
 const stepVariedad = $("stepVariedad");
@@ -1158,6 +1229,7 @@ const lastLEl = $("lastLPending");
   let pendingG = null;
   let x6Batch = null;
   let x6LastVariety = null;
+  let recordRemovalRecords = [];
 
   const palette = [
     "#FACC15", "#22C55E", "#F97316", "#EF4444",
@@ -2454,6 +2526,17 @@ function populateManualSpecialOptions() {
       ? currentWorker
       : (workers.includes("B01") ? "B01" : (workers[0] || ""));
   }
+
+  if (recordRemovalWorker) {
+    const currentWorker = recordRemovalWorker.value;
+    recordRemovalWorker.innerHTML = workers.map(code => {
+      const name = workerNameMap[code] || code;
+      return `<option value="${escapeHtml(code)}">${escapeHtml(code)} - ${escapeHtml(name)}</option>`;
+    }).join("");
+    recordRemovalWorker.value = workers.includes(currentWorker)
+      ? currentWorker
+      : (workers.includes("B01") ? "B01" : (workers[0] || ""));
+  }
 }
 
 function setHistoricalEntryDefaults(force = false) {
@@ -2469,6 +2552,9 @@ function setHistoricalEntryDefaults(force = false) {
   }
   if (historicalEntryTime && (force || !historicalEntryTime.value)) {
     historicalEntryTime.value = timeValue;
+  }
+  if (recordRemovalDate && (force || !recordRemovalDate.value)) {
+    recordRemovalDate.value = selectedHistoryDate || localDateKey(now);
   }
 }
 
@@ -3453,8 +3539,136 @@ async function submitHistoricalRecords() {
     historicalEntryStatus.textContent = err?.message || "No se pudieron guardar los registros.";
   } finally {
     historicalEntrySubmit.disabled = false;
-    suspendAutoFocus = !!historicalEntrySection?.open;
+    syncAdminToolFocusState();
   }
+}
+
+function getSelectedRemovalIds() {
+  if (!recordRemovalRows) return [];
+  return [...recordRemovalRows.querySelectorAll('input[data-removal-id]:checked')]
+    .map((input) => String(input.dataset.removalId || ""))
+    .filter(Boolean);
+}
+
+function updateRecordRemovalSelection() {
+  const count = getSelectedRemovalIds().length;
+  if (recordRemovalCount) recordRemovalCount.textContent = `${count} seleccionado${count === 1 ? "" : "s"}`;
+  if (recordRemovalDelete) recordRemovalDelete.disabled = count === 0;
+}
+
+function renderRecordRemovalRows() {
+  if (!recordRemovalRows) return;
+  if (!recordRemovalRecords.length) {
+    recordRemovalRows.innerHTML = `<tr><td colspan="7" class="recordRemovalEmpty">No hay registros para este bonchador en la fecha seleccionada.</td></tr>`;
+    updateRecordRemovalSelection();
+    return;
+  }
+
+  recordRemovalRows.innerHTML = recordRemovalRecords.map((record) => {
+    const variety = record.variedad_nombre || record.variedad_id || "—";
+    const lamina = record.lamina_nombre || record.lamina_id || "—";
+    return `
+      <tr>
+        <td><input type="checkbox" data-removal-id="${escapeHtml(record.id)}" aria-label="Seleccionar registro ${escapeHtml(record.id)}" /></td>
+        <td class="mono">${escapeHtml(fmtTime(record.ts))}</td>
+        <td>${escapeHtml(record.tallos ?? "—")}</td>
+        <td>${escapeHtml(variety)}</td>
+        <td>${escapeHtml(record.grado_cm || "—")}</td>
+        <td>${escapeHtml(lamina)}</td>
+        <td>${escapeHtml(record.finca || "—")}</td>
+      </tr>`;
+  }).join("");
+  updateRecordRemovalSelection();
+}
+
+function resetRecordRemovalList(message = "Seleccione fecha y bonchador para cargar registros.") {
+  recordRemovalRecords = [];
+  if (recordRemovalRows) {
+    recordRemovalRows.innerHTML = `<tr><td colspan="7" class="recordRemovalEmpty">${escapeHtml(message)}</td></tr>`;
+  }
+  if (recordRemovalStatus) recordRemovalStatus.textContent = "";
+  updateRecordRemovalSelection();
+}
+
+async function loadRecordsForRemoval() {
+  const date = String(recordRemovalDate?.value || "").trim();
+  const worker = String(recordRemovalWorker?.value || "").trim().toUpperCase();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^B(?:0[1-9]|1[0-3])$/.test(worker)) {
+    recordRemovalStatus.style.color = "#fda4af";
+    recordRemovalStatus.textContent = "Seleccione una fecha y un bonchador válidos.";
+    return;
+  }
+
+  recordRemovalLoad.disabled = true;
+  recordRemovalStatus.style.color = "#bfdbfe";
+  recordRemovalStatus.textContent = "Cargando registros...";
+  try {
+    const res = await fetch(`${API}/api/scans?date=${encodeURIComponent(date)}&limit=30000`, { cache: "no-store" });
+    const data = await res.json().catch(() => []);
+    if (!res.ok) throw new Error(data.error || "No se pudieron cargar los registros");
+
+    recordRemovalRecords = (Array.isArray(data) ? data : [])
+      .filter((record) => String(record.worker || "").trim().toUpperCase() === worker)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    renderRecordRemovalRows();
+    recordRemovalStatus.style.color = recordRemovalRecords.length ? "#86efac" : "#9bb0d0";
+    recordRemovalStatus.textContent = `${recordRemovalRecords.length} registro(s) encontrados para ${worker} el ${date}.`;
+  } catch (err) {
+    resetRecordRemovalList("No se pudieron cargar los registros.");
+    recordRemovalStatus.style.color = "#fda4af";
+    recordRemovalStatus.textContent = err?.message || "No se pudieron cargar los registros.";
+  } finally {
+    recordRemovalLoad.disabled = false;
+  }
+}
+
+async function deleteSelectedWorkerRecords() {
+  const ids = getSelectedRemovalIds();
+  const date = String(recordRemovalDate?.value || "").trim();
+  const worker = String(recordRemovalWorker?.value || "").trim().toUpperCase();
+  if (!ids.length) return;
+
+  const workerLabel = workerNameMap[worker] && workerNameMap[worker] !== worker
+    ? `${worker} - ${workerNameMap[worker]}`
+    : worker;
+  const confirmed = window.confirm(
+    `Se eliminarán definitivamente ${ids.length} registro(s).\n\n`
+    + `${workerLabel}\nFecha: ${date}\n\n¿Desea continuar?`
+  );
+  if (!confirmed) return;
+
+  recordRemovalDelete.disabled = true;
+  recordRemovalStatus.style.color = "#fecdd3";
+  recordRemovalStatus.textContent = `Eliminando ${ids.length} registro(s)...`;
+  try {
+    const res = await fetch(API + "/api/scans/delete-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, worker, ids }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "No se pudieron eliminar los registros");
+
+    const deletedSet = new Set((data.ids || []).map(String));
+    recordRemovalRecords = recordRemovalRecords.filter((record) => !deletedSet.has(String(record.id)));
+    scans = scans.filter((record) => !deletedSet.has(String(record.id)));
+    renderRecordRemovalRows();
+    renderAll();
+
+    const visibleDate = selectedHistoryDate || localDateKey();
+    if (date === visibleDate) await refreshAll({ replace: true });
+    recordRemovalStatus.style.color = "#86efac";
+    recordRemovalStatus.textContent = `${data.count || 0} registro(s) eliminados correctamente.`;
+  } catch (err) {
+    recordRemovalStatus.style.color = "#fda4af";
+    recordRemovalStatus.textContent = err?.message || "No se pudieron eliminar los registros.";
+    updateRecordRemovalSelection();
+  }
+}
+
+function syncAdminToolFocusState() {
+  suspendAutoFocus = !!historicalEntrySection?.open || !!recordRemovalSection?.open;
+  if (!suspendAutoFocus) focusScanInput();
 }
 
 function openGradeReportModal() {
@@ -3848,17 +4062,40 @@ document.addEventListener("keydown", async (e) => {
   });
   historicalEntrySection?.addEventListener("toggle", () => {
     if (historicalEntrySection.open) {
+      if (recordRemovalSection?.open) recordRemovalSection.open = false;
       setHistoricalEntryDefaults();
-      suspendAutoFocus = true;
-    } else {
-      suspendAutoFocus = false;
-      focusScanInput();
     }
+    syncAdminToolFocusState();
   });
   historicalEntryForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     await submitHistoricalRecords();
   });
+  recordRemovalSection?.addEventListener("toggle", () => {
+    if (recordRemovalSection.open) {
+      if (historicalEntrySection?.open) historicalEntrySection.open = false;
+      setHistoricalEntryDefaults();
+    }
+    syncAdminToolFocusState();
+  });
+  recordRemovalLoad?.addEventListener("click", loadRecordsForRemoval);
+  recordRemovalRows?.addEventListener("change", updateRecordRemovalSelection);
+  recordRemovalSelectAll?.addEventListener("click", () => {
+    const inputs = [...(recordRemovalRows?.querySelectorAll('input[data-removal-id]') || [])];
+    inputs.forEach((input, index) => { input.checked = index < 1000; });
+    updateRecordRemovalSelection();
+    if (inputs.length > 1000) {
+      recordRemovalStatus.style.color = "#fde68a";
+      recordRemovalStatus.textContent = "Se marcaron los primeros 1000 registros. Elimine ese grupo y luego cargue los restantes.";
+    }
+  });
+  recordRemovalClear?.addEventListener("click", () => {
+    recordRemovalRows?.querySelectorAll('input[data-removal-id]').forEach((input) => { input.checked = false; });
+    updateRecordRemovalSelection();
+  });
+  recordRemovalDelete?.addEventListener("click", deleteSelectedWorkerRecords);
+  recordRemovalDate?.addEventListener("change", () => resetRecordRemovalList("Pulse Cargar registros para consultar la nueva fecha."));
+  recordRemovalWorker?.addEventListener("change", () => resetRecordRemovalList("Pulse Cargar registros para consultar el nuevo bonchador."));
   document.addEventListener("keydown", (e) => { if (e.key === "F9") focusScan(); });
 
   let buffer = "";
