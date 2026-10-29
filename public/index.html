@@ -469,6 +469,34 @@
       border-bottom-color:rgba(245,158,11,.35);
       box-shadow:inset 3px 0 0 rgba(245,158,11,.9);
     }
+    @keyframes newScanRowGlow{
+      0%{
+        background-color:rgba(34,255,126,.48);
+        border-bottom-color:rgba(134,239,172,.95);
+        box-shadow:inset 0 0 30px rgba(34,255,126,.36);
+      }
+      28%{
+        background-color:rgba(16,185,129,.30);
+        border-bottom-color:rgba(74,222,128,.78);
+        box-shadow:inset 0 0 20px rgba(34,255,126,.24);
+      }
+      100%{
+        background-color:transparent;
+        border-bottom-color:rgba(31,51,88,.6);
+        box-shadow:inset 0 0 0 rgba(34,255,126,0);
+      }
+    }
+    tbody tr.new-scan-row td{
+      background-color:rgba(34,255,126,.48);
+      color:#f0fff6;
+      animation:newScanRowGlow 1.8s ease-out forwards;
+    }
+    tbody tr.new-scan-row td:first-child{
+      box-shadow:inset 5px 0 0 #39ff88, inset 0 0 30px rgba(34,255,126,.36);
+    }
+    @media (prefers-reduced-motion:reduce){
+      tbody tr.new-scan-row td{animation:none;background-color:rgba(16,185,129,.28)}
+    }
     .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .manualSpecialSection{
       margin-top:14px;
@@ -1230,6 +1258,7 @@ const lastLEl = $("lastLPending");
   let x6Batch = null;
   let x6LastVariety = null;
   let recordRemovalRecords = [];
+  const recentScanHighlights = new Map();
 
   const palette = [
     "#FACC15", "#22C55E", "#F97316", "#EF4444",
@@ -1428,7 +1457,7 @@ function saveOfflineScan(payload) {
   queue.push(item);
 
   localStorage.setItem("offlineScans", JSON.stringify(queue));
-  addOfflineScanToView(item);
+  addOfflineScanToView(item, true);
   updateOfflineStatusFromQueue();
   return item;
 }
@@ -1444,7 +1473,7 @@ function addOfflineQueueToView() {
   for (const item of getOfflineQueue()) addOfflineScanToView(item);
 }
 
-function addOfflineScanToView(item) {
+function addOfflineScanToView(item, highlight = false) {
   if (!item?.idLocal || !item?.payload) return;
 
   const payload = item.payload;
@@ -1469,7 +1498,7 @@ function addOfflineScanToView(item) {
     lamina_nombre: laminaObj ? displayLaminaLabel(laminaObj.id, laminaNameMap[laminaObj.id] || laminaObj.id) : null,
     finca: fincaObj?.finca || null,
     offline_pending: true
-  });
+  }, highlight);
 }
 
 function normalizePlainText(value) {
@@ -2330,6 +2359,11 @@ function isReprocesoLaminaRecord(r) {
     const pending = !!r.offline_pending;
 
     const tr = document.createElement("tr");
+    const scanId = String(r.id ?? "");
+    const highlightUntil = recentScanHighlights.get(scanId) || 0;
+    if (highlightUntil > Date.now()) tr.classList.add("new-scan-row");
+    else if (highlightUntil) recentScanHighlights.delete(scanId);
+    tr.dataset.scanId = scanId;
     if (pending) tr.classList.add("offline-row");
     tr.innerHTML = `
       <td class="mono">${fmtTime(r.ts)}</td>
@@ -3748,7 +3782,23 @@ async function generateGradeEstimateExcel() {
   }
 }
 
-  function addScanIfNotExists(reg) {
+  function markScanAsNew(id, duration = 2000) {
+  const scanId = String(id ?? "");
+  if (!scanId) return;
+
+  const expiresAt = Date.now() + duration;
+  recentScanHighlights.set(scanId, expiresAt);
+
+  setTimeout(() => {
+    if (recentScanHighlights.get(scanId) !== expiresAt) return;
+    recentScanHighlights.delete(scanId);
+    for (const row of tb?.rows || []) {
+      if (row.dataset.scanId === scanId) row.classList.remove("new-scan-row");
+    }
+  }, duration);
+}
+
+  function addScanIfNotExists(reg, highlight = true) {
   if (!reg || reg.id == null) return;
 
   const idx = scans.findIndex(r => String(r.id) === String(reg.id));
@@ -3757,6 +3807,7 @@ async function generateGradeEstimateExcel() {
     scans[idx] = { ...scans[idx], ...reg };
   } else {
     scans.unshift(reg);
+    if (highlight) markScanAsNew(reg.id);
   }
 
   scans.sort((a, b) => new Date(b.ts) - new Date(a.ts));
