@@ -1250,6 +1250,8 @@ const lastLEl = $("lastLPending");
   let pendingAll = {};
   let es = null;
   let selectedHistoryDate = "";
+  let followToday = true;
+  let dateRolloverInProgress = false;
 
   let pendingWorker = null; // { raw, code, tallos }
   let pendingV = null;      // { raw, variedad, grado }
@@ -1439,16 +1441,49 @@ function hideOfflineStatusAfter(ms = 5000) {
 
   function getOfflineQueue() {
   try {
-    return JSON.parse(localStorage.getItem("offlineScans") || "[]");
+    const parsed = JSON.parse(localStorage.getItem("offlineScans") || "[]");
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
+function createClientRecordId() {
+  if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const digit = char === "x" ? value : ((value & 0x3) | 0x8);
+    return digit.toString(16);
+  });
+}
+
+function ensureClientRecordId(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  if (!payload.clientRecordId) payload.clientRecordId = createClientRecordId();
+  if (!payload.capturedAt) payload.capturedAt = new Date().toISOString();
+  return payload;
+}
+
+function persistOfflineQueue(queue) {
+  try {
+    localStorage.setItem("offlineScans", JSON.stringify(queue));
+    return true;
+  } catch (err) {
+    console.error("No se pudo guardar la cola offline:", err);
+    showOfflineStatus("ALERTA: el navegador no pudo guardar el registro pendiente", "bad");
+    return false;
+  }
+}
+
 function saveOfflineScan(payload) {
+  ensureClientRecordId(payload);
   const queue = getOfflineQueue();
+  const existing = queue.find((entry) => entry?.payload?.clientRecordId === payload.clientRecordId);
+  if (existing) return existing;
+
   const item = {
-    idLocal: crypto.randomUUID(),
+    idLocal: createClientRecordId(),
     fechaLocal: new Date().toISOString(),
     payload,
     sincronizado: false
@@ -1456,7 +1491,7 @@ function saveOfflineScan(payload) {
 
   queue.push(item);
 
-  localStorage.setItem("offlineScans", JSON.stringify(queue));
+  if (!persistOfflineQueue(queue)) return null;
   addOfflineScanToView(item, true);
   updateOfflineStatusFromQueue();
   return item;
@@ -1464,9 +1499,10 @@ function saveOfflineScan(payload) {
 
 function removeOfflineScan(idLocal) {
   const queue = getOfflineQueue().filter(x => x.idLocal !== idLocal);
-  localStorage.setItem("offlineScans", JSON.stringify(queue));
+  if (!persistOfflineQueue(queue)) return false;
   scans = scans.filter(r => String(r.id) !== `offline-${idLocal}`);
   updateOfflineStatusFromQueue();
+  return true;
 }
 
 function addOfflineQueueToView() {
@@ -2318,7 +2354,7 @@ function isReprocesoLaminaRecord(r) {
 
     scans = scans.filter(r => String(r.id) !== String(id));
 
-    lastScanEl.textContent = `Registro ${id} eliminado`;
+    lastScanEl.textContent = `Registro ${id} archivado de forma recuperable`;
 
     renderAll();
 
@@ -2336,7 +2372,7 @@ function isReprocesoLaminaRecord(r) {
   const laminaSelected = (laminaFilter?.value || "").trim().toUpperCase();
   const history = isHistoryMode();
 
-  const rows = getFilteredScans()
+  const matchingRows = getFilteredScans()
     .filter(r => {
       const worker = String(r.worker || "").trim().toUpperCase();
       const variedadId = String(r.variedad_id || "").trim().toUpperCase();
@@ -2351,8 +2387,8 @@ function isReprocesoLaminaRecord(r) {
 
       return true;
     })
-    .sort((a,b) => new Date(b.ts) - new Date(a.ts))
-    .slice(0, 150);
+    .sort((a,b) => new Date(b.ts) - new Date(a.ts));
+  const rows = matchingRows.slice(0, 150);
 
   for (const r of rows) {
     const name = r.worker_name || workerNameMap[String(r.worker || "").trim()] || "";
@@ -2390,7 +2426,9 @@ function isReprocesoLaminaRecord(r) {
     });
   });
 
-  countInfo.textContent = `${rows.length} registros visibles`;
+  countInfo.textContent = matchingRows.length > rows.length
+    ? `Mostrando los últimos ${rows.length} de ${matchingRows.length} registros; los demás siguen guardados.`
+    : `${matchingRows.length} registros visibles`;
 }
 function getLaminaColorClass(nombreLamina) {
   const txt = String(nombreLamina || "")
@@ -3375,6 +3413,8 @@ async function sendX6Batch() {
 }
 
   async function sendToServer(payload) {
+  ensureClientRecordId(payload);
+
   try {
     const res = await fetch(API + "/api/scan", {
       method: "POST",
@@ -3388,7 +3428,14 @@ async function sendX6Batch() {
     } catch {}
 
     if (!res.ok && res.status >= 500) {
-      saveOfflineScan(payload);
+      const queuedItem = saveOfflineScan(payload);
+      if (!queuedItem) {
+        return {
+          ok: false,
+          offline: false,
+          data: { error: "No fue posible guardar en el servidor ni en la cola local" }
+        };
+      }
       return {
         ok: true,
         offline: true,
@@ -3402,7 +3449,14 @@ async function sendX6Batch() {
     return { ok: res.ok, data, offline: false };
 
   } catch (err) {
-    saveOfflineScan(payload);
+    const queuedItem = saveOfflineScan(payload);
+    if (!queuedItem) {
+      return {
+        ok: false,
+        offline: false,
+        data: { error: "No fue posible guardar en el servidor ni en la cola local" }
+      };
+    }
 
     return {
       ok: true,
@@ -3666,7 +3720,7 @@ async function deleteSelectedWorkerRecords() {
     ? `${worker} - ${workerNameMap[worker]}`
     : worker;
   const confirmed = window.confirm(
-    `Se eliminarán definitivamente ${ids.length} registro(s).\n\n`
+    `Se archivarán ${ids.length} registro(s). Quedarán respaldados para recuperación.\n\n`
     + `${workerLabel}\nFecha: ${date}\n\n¿Desea continuar?`
   );
   if (!confirmed) return;
@@ -3692,7 +3746,7 @@ async function deleteSelectedWorkerRecords() {
     const visibleDate = selectedHistoryDate || localDateKey();
     if (date === visibleDate) await refreshAll({ replace: true });
     recordRemovalStatus.style.color = "#86efac";
-    recordRemovalStatus.textContent = `${data.count || 0} registro(s) eliminados correctamente.`;
+    recordRemovalStatus.textContent = `${data.count || 0} registro(s) archivados correctamente y disponibles para recuperación.`;
   } catch (err) {
     recordRemovalStatus.style.color = "#fda4af";
     recordRemovalStatus.textContent = err?.message || "No se pudieron eliminar los registros.";
@@ -3945,6 +3999,20 @@ async function syncOfflineScans() {
   const queue = getOfflineQueue();
   if (!queue.length) return;
 
+  let queueChanged = false;
+  for (const item of queue) {
+    if (!item?.payload) continue;
+    if (!item.payload.capturedAt) {
+      item.payload.capturedAt = item.fechaLocal || new Date().toISOString();
+      queueChanged = true;
+    }
+    if (!item.payload.clientRecordId) {
+      ensureClientRecordId(item.payload);
+      queueChanged = true;
+    }
+  }
+  if (queueChanged && !persistOfflineQueue(queue)) return;
+
   for (const item of queue) {
     try {
       const res = await fetch(API + "/api/scan", {
@@ -4184,6 +4252,7 @@ document.addEventListener("keydown", async (e) => {
     if (!value) return;
 
     selectedHistoryDate = value;
+    followToday = value === localDateKey();
     scans = [];
     pendingAll = {};
     try { es?.close(); } catch {}
@@ -4201,6 +4270,7 @@ document.addEventListener("keydown", async (e) => {
 
   btnTodayView?.addEventListener("click", async () => {
     selectedHistoryDate = localDateKey();
+    followToday = true;
     scans = [];
     pendingAll = {};
     await refreshAll();
@@ -4544,8 +4614,29 @@ document.addEventListener("DOMContentLoaded", activarEscaneoInicial);
 window.addEventListener("load", activarEscaneoInicial);
 window.addEventListener("pageshow", activarEscaneoInicial);
 
+async function handleLocalDateRollover() {
+  if (!followToday || dateRolloverInProgress) return;
+
+  const today = localDateKey();
+  if (selectedHistoryDate === today) return;
+
+  dateRolloverInProgress = true;
+  try {
+    selectedHistoryDate = today;
+    scans = [];
+    pendingAll = {};
+    setHistoricalEntryDefaults(true);
+    updateHistoryModeUI();
+    await refreshAll({ replace: true });
+    startSSE();
+  } finally {
+    dateRolloverInProgress = false;
+  }
+}
+
 (async () => {
   selectedHistoryDate = localDateKey();
+  followToday = true;
   setHistoricalEntryDefaults(true);
   updateHistoryModeUI();
   activarEscaneoInicial();
@@ -4570,11 +4661,16 @@ window.addEventListener("pageshow", activarEscaneoInicial);
     }
 
     setupHiDPICanvas();
+    if (navigator.storage?.persist) {
+      navigator.storage.persist().catch(() => false);
+    }
     addOfflineQueueToView();
     updateOfflineStatusFromQueue();
     renderAll();
     installResizeObservers();
     updateScanProgressUI();
+
+    setInterval(handleLocalDateRollover, 30000);
 
     setInterval(async () => {
   if (!navigator.onLine) return;

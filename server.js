@@ -60,6 +60,7 @@ const GRADE_ESTIMATE_PERCENTAGES = [
 let workerNameMap = {};
 let scansNameColumnsReady = false;
 let workerNamesTableReady = false;
+let dataProtectionSchemaPromise = null;
 
 // Conjunto de clientes SSE conectados
 const clients = new Set();
@@ -473,6 +474,51 @@ async function ensureScansNameColumns() {
   scansNameColumnsReady = true;
 }
 
+async function ensureDataProtectionSchema() {
+  if (dataProtectionSchemaPromise) return dataProtectionSchemaPromise;
+
+  dataProtectionSchemaPromise = (async () => {
+    await ensureScansNameColumns();
+
+    await pool.query(`
+      ALTER TABLE public.scans
+      ADD COLUMN IF NOT EXISTS client_record_id uuid
+    `);
+
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS scans_client_record_id_unique_idx
+      ON public.scans (client_record_id)
+      WHERE client_record_id IS NOT NULL
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.scan_deletion_archive (
+        archive_id bigserial PRIMARY KEY,
+        original_scan_id bigint NOT NULL,
+        scan_data jsonb NOT NULL,
+        delete_source character varying(40) NOT NULL,
+        delete_metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        deleted_at timestamp with time zone NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS scan_deletion_archive_deleted_at_idx
+      ON public.scan_deletion_archive (deleted_at DESC)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS scan_deletion_archive_original_id_idx
+      ON public.scan_deletion_archive (original_scan_id)
+    `);
+  })().catch((err) => {
+    dataProtectionSchemaPromise = null;
+    throw err;
+  });
+
+  return dataProtectionSchemaPromise;
+}
+
 async function ensureWorkerNamesTable() {
   if (workerNamesTableReady) return;
 
@@ -553,13 +599,24 @@ async function updateTodayWorkerName(workerCode, workerName) {
   );
 }
 
-async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, laminaNombre, finca = null) {
-  await ensureScansNameColumns();
+async function saveScan(
+  wObj,
+  vObj,
+  gObj,
+  lObj,
+  variedadNombre,
+  workerName,
+  laminaNombre,
+  finca = null,
+  clientRecordId = null,
+  capturedAt = new Date()
+) {
+  await ensureDataProtectionSchema();
 
   const client = await pool.connect();
 
   try {
-    const localTimestamp = new Date();
+    const localTimestamp = capturedAt instanceof Date ? capturedAt : new Date();
 
     const query = `
       INSERT INTO scans (
@@ -574,9 +631,12 @@ async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, lami
         raw_b,
         lamina_id,
         lamina_nombre,
-        finca
+        finca,
+        client_record_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ON CONFLICT (client_record_id) WHERE client_record_id IS NOT NULL
+      DO UPDATE SET client_record_id = EXCLUDED.client_record_id
       RETURNING *
     `;
 
@@ -592,7 +652,8 @@ async function saveScan(wObj, vObj, gObj, lObj, variedadNombre, workerName, lami
       vObj ? `${vObj.raw}-${gObj.raw}` : gObj.raw,
       lObj.id,             // L1
       laminaNombre,
-      finca
+      finca,
+      clientRecordId
     ];
 
     const result = await client.query(query, values);
@@ -696,6 +757,19 @@ function parseHistoricalTimestamp(dateValue, timeValue) {
   return timestamp;
 }
 
+function isValidClientRecordId(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    .test(String(value || "").trim());
+}
+
+function parseClientTimestamp(value) {
+  const text = String(value || "").trim();
+  if (!text) return new Date();
+
+  const timestamp = new Date(text);
+  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
+}
+
 app.post("/api/manual-records", async (req, res) => {
   try {
     const { date, time, worker, tallos, variedad, grado, lamina, finca, quantity } = req.body || {};
@@ -788,7 +862,16 @@ app.post("/api/manual-records", async (req, res) => {
 
 app.post("/api/scan", async (req, res) => {
   try {
-    const { worker, variedad, grado, lamina, finca, qrSinVariedad } = req.body || {};
+    const {
+      worker,
+      variedad,
+      grado,
+      lamina,
+      finca,
+      qrSinVariedad,
+      clientRecordId,
+      capturedAt,
+    } = req.body || {};
 
     const wObj = parseWorker(worker);
     const vObj = parseVariedad(variedad);
@@ -796,6 +879,21 @@ app.post("/api/scan", async (req, res) => {
     const lObj = parseLamina(lamina);
     const variedadIngresada = String(variedad || "").trim();
     const permiteVariedadVacia = qrSinVariedad === true && !variedadIngresada;
+    const requestedClientRecordId = String(clientRecordId || "").trim().toLowerCase();
+    const stableClientRecordId = requestedClientRecordId || crypto.randomUUID();
+    const capturedTimestamp = parseClientTimestamp(capturedAt);
+
+    if (!isValidClientRecordId(stableClientRecordId)) {
+      return res.status(400).json({
+        error: "Identificador de registro inválido",
+      });
+    }
+
+    if (!capturedTimestamp) {
+      return res.status(400).json({
+        error: "Fecha original del registro inválida",
+      });
+    }
 
     if (!wObj) {
       return res.status(400).json({
@@ -860,7 +958,9 @@ app.post("/api/scan", async (req, res) => {
       variedadDb?.nombre || null,
       workerName,
       laminaNombre,
-      fincaValue
+      fincaValue,
+      stableClientRecordId,
+      capturedTimestamp
     );
 
     const broadcastData = {
@@ -1273,6 +1373,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
 });
 
 app.post("/api/scans/delete-batch", async (req, res) => {
+  let client;
   try {
     const date = String(req.body?.date || "").trim();
     const worker = String(req.body?.worker || "").trim().toUpperCase();
@@ -1294,28 +1395,79 @@ app.post("/api/scans/delete-batch", async (req, res) => {
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
 
-    const result = await pool.query(
+    await ensureDataProtectionSchema();
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const deleteMetadata = JSON.stringify({
+      ip: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+      worker,
+      date,
+    });
+
+    const lockedRows = await client.query(
       `
-      DELETE FROM scans
+      SELECT id
+      FROM public.scans
+      WHERE id = ANY($1::bigint[])
+        AND UPPER(worker) = $2
+        AND ts >= $3
+        AND ts < $4
+      FOR UPDATE
+      `,
+      [ids, worker, start, end]
+    );
+    const lockedIds = lockedRows.rows.map((row) => String(row.id));
+
+    await client.query(
+      `
+      INSERT INTO public.scan_deletion_archive (
+        original_scan_id,
+        scan_data,
+        delete_source,
+        delete_metadata
+      )
+      SELECT id, to_jsonb(s), 'batch', $5::jsonb
+      FROM public.scans s
+      WHERE id = ANY($1::bigint[])
+        AND UPPER(worker) = $2
+        AND ts >= $3
+        AND ts < $4
+      `,
+      [lockedIds, worker, start, end, deleteMetadata]
+    );
+
+    const result = await client.query(
+      `
+      DELETE FROM public.scans
       WHERE id = ANY($1::bigint[])
         AND UPPER(worker) = $2
         AND ts >= $3
         AND ts < $4
       RETURNING id
       `,
-      [ids, worker, start, end]
+      [lockedIds, worker, start, end]
     );
+
+    await client.query("COMMIT");
 
     const deletedIds = result.rows.map((row) => String(row.id));
     deletedIds.forEach((id) => broadcast({ kind: "delete", id }));
-    return res.json({ ok: true, count: deletedIds.length, ids: deletedIds });
+    return res.json({ ok: true, archived: true, count: deletedIds.length, ids: deletedIds });
   } catch (err) {
+    if (client) {
+      try { await client.query("ROLLBACK"); } catch {}
+    }
     console.error("POST /api/scans/delete-batch error:", err);
     return res.status(500).json({ error: "No se pudieron eliminar los registros seleccionados" });
+  } finally {
+    client?.release();
   }
 });
 
 app.delete("/api/scans/:id", async (req, res) => {
+  let client;
   try {
     const id = Number(req.params.id);
 
@@ -1326,9 +1478,51 @@ app.delete("/api/scans/:id", async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    await ensureDataProtectionSchema();
+    client = await pool.connect();
+    await client.query("BEGIN");
+
+    const deleteMetadata = JSON.stringify({
+      ip: req.ip || null,
+      userAgent: req.get("user-agent") || null,
+    });
+
+    const lockedRows = await client.query(
       `
-      DELETE FROM scans
+      SELECT id
+      FROM public.scans
+      WHERE id = $1
+      FOR UPDATE
+      `,
+      [id]
+    );
+
+    if (!lockedRows.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        ok: false,
+        error: "Registro no encontrado"
+      });
+    }
+
+    await client.query(
+      `
+      INSERT INTO public.scan_deletion_archive (
+        original_scan_id,
+        scan_data,
+        delete_source,
+        delete_metadata
+      )
+      SELECT id, to_jsonb(s), 'single', $2::jsonb
+      FROM public.scans s
+      WHERE id = $1
+      `,
+      [id, deleteMetadata]
+    );
+
+    const result = await client.query(
+      `
+      DELETE FROM public.scans
       WHERE id = $1
       RETURNING id
       `,
@@ -1336,11 +1530,14 @@ app.delete("/api/scans/:id", async (req, res) => {
     );
 
     if (!result.rows.length) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         ok: false,
         error: "Registro no encontrado"
       });
     }
+
+    await client.query("COMMIT");
 
     broadcast({
       kind: "delete",
@@ -1349,15 +1546,21 @@ app.delete("/api/scans/:id", async (req, res) => {
 
     return res.json({
       ok: true,
+      archived: true,
       id
     });
 
   } catch (err) {
+    if (client) {
+      try { await client.query("ROLLBACK"); } catch {}
+    }
     console.error("DELETE /api/scans/:id error:", err);
     return res.status(500).json({
       ok: false,
       error: "Error eliminando registro"
     });
+  } finally {
+    client?.release();
   }
 });
 
@@ -1391,9 +1594,25 @@ app.get("/api/stream", (req, res) => {
    ========================================================== */
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Servidor en puerto ${PORT} (Formatos: Bxx-Tyy, Vxx-gg y Lx)`);
-  loadWorkerNames()
-    .then(() => console.log(`Nombres persistentes cargados: ${Object.keys(workerNameMap).length}`))
-    .catch((err) => console.error("No se pudieron precargar los nombres de bonchadores:", err));
-});
+function startServer(port = PORT) {
+  return app.listen(port, "0.0.0.0", () => {
+    console.log(`Servidor en puerto ${port} (Formatos: Bxx-Tyy, Vxx-gg y Lx)`);
+    loadWorkerNames()
+      .then(() => console.log(`Nombres persistentes cargados: ${Object.keys(workerNameMap).length}`))
+      .catch((err) => console.error("No se pudieron precargar los nombres de bonchadores:", err));
+  });
+}
+
+if (require.main === module) startServer();
+
+module.exports = {
+  app,
+  isValidClientRecordId,
+  parseClientTimestamp,
+  parseGrado,
+  parseHistoricalTimestamp,
+  parseLamina,
+  parseVariedad,
+  parseWorker,
+  startServer,
+};
