@@ -48,3 +48,16 @@ test("el JavaScript incrustado del cliente conserva sintaxis válida", () => {
   assert.ok(start >= 0 && end > start, "No se encontró el script principal");
   assert.doesNotThrow(() => new Function(html.slice(start + 8, end)));
 });
+
+test("la cola offline impide sincronizaciones simultáneas", () => {
+  const htmlPath = path.join(__dirname, "..", "public", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.match(html, /if \(offlineSyncPromise\) return offlineSyncPromise;/);
+  assert.match(html, /offlineSyncPromise = performOfflineSync\(\)/);
+});
+
+test("los registros manuales múltiples reciben identificadores independientes", () => {
+  const htmlPath = path.join(__dirname, "..", "public", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.match(html, /sendToServer\(\{ \.\.\.payload \}\)/);
+});

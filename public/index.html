@@ -1252,6 +1252,7 @@ const lastLEl = $("lastLPending");
   let selectedHistoryDate = "";
   let followToday = true;
   let dateRolloverInProgress = false;
+  let offlineSyncPromise = null;
 
   let pendingWorker = null; // { raw, code, tallos }
   let pendingV = null;      // { raw, variedad, grado }
@@ -3514,7 +3515,8 @@ async function submitManualSpecialRecords() {
   async function saveNext() {
     while (next < quantity) {
       const itemNumber = ++next;
-      const out = await sendToServer(payload);
+      // Cada ramo intencional necesita su propio ID; no reutilizar el objeto base.
+      const out = await sendToServer({ ...payload });
 
       if (out.ok) {
         saved += 1;
@@ -3995,7 +3997,16 @@ async function sendFullScanCode(full) {
   }
 }
 
-async function syncOfflineScans() {
+function syncOfflineScans() {
+  if (offlineSyncPromise) return offlineSyncPromise;
+
+  offlineSyncPromise = performOfflineSync()
+    .finally(() => { offlineSyncPromise = null; });
+
+  return offlineSyncPromise;
+}
+
+async function performOfflineSync() {
   const queue = getOfflineQueue();
   if (!queue.length) return;
 
