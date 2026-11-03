@@ -44,7 +44,7 @@ const pool = new Pool({
 // Configuración y estado
 // -----------------------------
 const WORKER_MIN = 1;
-const WORKER_MAX = 13;
+const WORKER_MAX = 20;
 const REPORT_PASSWORD = process.env.REPORT_PASSWORD || "P1-INFORME-2026";
 // Pesos base: se varían por variedad/finca y luego se normalizan hasta completar 100%.
 const GRADE_ESTIMATE_PERCENTAGES = [
@@ -101,7 +101,7 @@ app.post("/api/workers", async (req, res) => {
     const { code, name } = req.body || {};
     const workerCode = String(code || "").trim().toUpperCase();
 
-    if (!/^B(?:0[1-9]|1[0-3])$/.test(workerCode)) {
+    if (!/^B(?:0[1-9]|1\d|20)$/.test(workerCode)) {
       return res.status(400).json({ error: "Código de bonchador inválido" });
     }
 
@@ -219,7 +219,7 @@ function parseWorker(code) {
   if (!Number.isFinite(tallos) || tallos <= 0) return null;
 
   return {
-    code: `B${String(n).padStart(2, "0")}`, // B01, B02... B13
+    code: `B${String(n).padStart(2, "0")}`, // B01, B02... B20
     tallos,
     raw: up,
   };
@@ -1381,7 +1381,7 @@ app.post("/api/scans/delete-batch", async (req, res) => {
     const ids = [...new Set(requestedIds.map((id) => String(id).trim()))]
       .filter((id) => /^\d+$/.test(id));
 
-    if (!/^B(?:0[1-9]|1[0-3])$/.test(worker)) {
+    if (!/^B(?:0[1-9]|1\d|20)$/.test(worker)) {
       return res.status(400).json({ error: "Bonchador inválido" });
     }
     if (ids.length < 1 || ids.length > 1000 || ids.length !== requestedIds.length) {

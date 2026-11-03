@@ -1242,7 +1242,7 @@ const lastLEl = $("lastLPending");
 
   let captureEnabled = false;
 
-  let workers = ["B01","B02","B03","B04","B05","B06","B07","B08","B09","B10","B11","B12","B13"];
+  let workers = Array.from({ length: 20 }, (_, index) => `B${String(index + 1).padStart(2, "0")}`);
   let workerNameMap = {};
   let variedadNameMap = {};
   let laminaNameMap = {};
@@ -2861,7 +2861,7 @@ async function loadVariedadesCatalog() {
   const n = parseInt(m[1], 10);
   const t = parseInt(m[2], 10);
 
-  if (n < 1 || n > 13) return null;
+  if (n < 1 || n > 20) return null;
   if (!Number.isFinite(t) || t <= 0) return null;
 
   const codeFixed = `B${String(n).padStart(2, "0")}`;
@@ -3683,7 +3683,7 @@ function resetRecordRemovalList(message = "Seleccione fecha y bonchador para car
 async function loadRecordsForRemoval() {
   const date = String(recordRemovalDate?.value || "").trim();
   const worker = String(recordRemovalWorker?.value || "").trim().toUpperCase();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^B(?:0[1-9]|1[0-3])$/.test(worker)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^B(?:0[1-9]|1\d|20)$/.test(worker)) {
     recordRemovalStatus.style.color = "#fda4af";
     recordRemovalStatus.textContent = "Seleccione una fecha y un bonchador válidos.";
     return;

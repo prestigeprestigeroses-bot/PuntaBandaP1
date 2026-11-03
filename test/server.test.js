@@ -23,7 +23,12 @@ test("valida bonchadores y evita códigos fuera del rango operativo", () => {
     tallos: 25,
     raw: "B1-T25",
   });
-  assert.equal(parseWorker("B14-T25"), null);
+  assert.deepEqual(parseWorker("B20-T25"), {
+    code: "B20",
+    tallos: 25,
+    raw: "B20-T25",
+  });
+  assert.equal(parseWorker("B21-T25"), null);
   assert.equal(parseWorker("B01-T0"), null);
 });
 
