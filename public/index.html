@@ -156,6 +156,50 @@
     }
     .stemTypePill b{font-size:14px;color:var(--worker-color, #93c5fd)}
     .stemTypePill strong{font-size:15px;color:#fff}
+    .varietyDetailList{display:grid;gap:7px}
+    .varietyDetailItem{
+      display:grid;
+      grid-template-columns:minmax(112px,1fr) minmax(150px,1.4fr) auto;
+      gap:9px;
+      align-items:center;
+      min-width:0;
+      padding:8px 9px;
+      border:1px solid rgba(31,51,88,.78);
+      border-radius:8px;
+      background:rgba(10,18,32,.32);
+    }
+    .varietyDetailName{
+      min-width:0;
+      color:#fff;
+      font-size:12px;
+      font-weight:900;
+      line-height:1.2;
+      overflow-wrap:anywhere;
+    }
+    .varietyStemTypes{display:flex;gap:5px;align-items:center;flex-wrap:wrap;min-width:0}
+    .varietyStemChip{
+      display:inline-flex;
+      align-items:center;
+      gap:5px;
+      padding:4px 7px;
+      border:1px solid var(--worker-color, rgba(96,165,250,.7));
+      border-radius:999px;
+      background:rgba(10,18,32,.55);
+      color:#dbeafe;
+      font-size:11px;
+      white-space:nowrap;
+    }
+    .varietyStemChip b{color:var(--worker-color, #93c5fd);font-size:12px}
+    .varietyStemChip strong{color:#fff;font-size:12px}
+    .varietyStemChip.special{border-color:rgba(250,204,21,.65)}
+    .varietyStemChip.special b{color:#fde047}
+    .varietyTotals{text-align:right;white-space:nowrap;color:#9bb0d0;font-size:10px;line-height:1.35}
+    .varietyTotals strong{display:block;color:#fff;font-size:13px}
+    @media(max-width:520px){
+      .varietyDetailItem{grid-template-columns:minmax(105px,.8fr) minmax(135px,1.2fr)}
+      .varietyTotals{grid-column:1 / -1;display:flex;gap:8px;text-align:left}
+      .varietyTotals strong{display:inline}
+    }
     .nationalSummary{
       display:flex;
       align-items:center;
@@ -2082,10 +2126,21 @@ function isReprocesoLaminaRecord(r) {
       }
 
       const key = varNombre;
-      if (!itW.variedades[key]) itW.variedades[key] = { nombre: varNombre, ramos: 0, tallos: 0, grados: {} };
+      if (!itW.variedades[key]) itW.variedades[key] = { nombre: varNombre, ramos: 0, tallos: 0, grados: {}, tiposRamo: {} };
       const itV = itW.variedades[key];
       itV.ramos += 1;
       itV.tallos += tallos;
+
+      let tipoRamo = "";
+      if (!esNacional && !esNacionalGranel && !esElite && !esBajas && !esReproceso && tallos > 0) {
+        tipoRamo = `X${tallos}`;
+      } else if (esNacional) tipoRamo = "NACIONAL";
+      else if (esNacionalGranel) tipoRamo = "NACIONAL GRANEL";
+      else if (esElite) tipoRamo = "ELITE";
+      else if (esBajas) tipoRamo = "BAJAS";
+      else if (esReproceso) tipoRamo = "REPROCESO";
+
+      if (tipoRamo) itV.tiposRamo[tipoRamo] = (itV.tiposRamo[tipoRamo] || 0) + 1;
 
       if (!itV.grados[grado]) itV.grados[grado] = { ramos: 0, tallos: 0 };
       itV.grados[grado].ramos += 1;
@@ -2134,11 +2189,28 @@ function isReprocesoLaminaRecord(r) {
       const rest = varArr.slice(topN);
 
       const makeVarietyRow = (v) => {
+        const tiposRamo = Object.entries(v.tiposRamo || {})
+          .map(([tipo, cantidad]) => ({ tipo, cantidad }))
+          .sort((a, b) => {
+            const aNumero = /^X\d+$/.test(a.tipo) ? Number(a.tipo.slice(1)) : Number.MAX_SAFE_INTEGER;
+            const bNumero = /^X\d+$/.test(b.tipo) ? Number(b.tipo.slice(1)) : Number.MAX_SAFE_INTEGER;
+            return aNumero - bNumero || a.tipo.localeCompare(b.tipo);
+          });
+
         return `
-          <div class="subRow" style="margin-top:6px;">
-            <span class="subPill"><b>${v.nombre}</b></span>
-            <span class="subPill"><b>${v.ramos}</b> ramos</span>
-            <span class="subPill"><b>${v.tallos}</b> tallos</span>
+          <div class="varietyDetailItem" style="--worker-color:${workerColors[w] || "#93C5FD"}">
+            <div class="varietyDetailName">${escapeHtml(v.nombre)}</div>
+            <div class="varietyStemTypes">
+              ${tiposRamo.map(item => `
+                <span class="varietyStemChip ${item.tipo.startsWith("X") ? "" : "special"}">
+                  <b>${escapeHtml(item.tipo)}</b><strong>${item.cantidad}</strong>
+                </span>
+              `).join("") || `<span class="hint">Sin tipo</span>`}
+            </div>
+            <div class="varietyTotals">
+              <strong>${v.ramos} ramos</strong>
+              <span>${v.tallos} tallos</span>
+            </div>
           </div>
         `;
       };
@@ -2199,10 +2271,12 @@ function isReprocesoLaminaRecord(r) {
 
       const detailHtml = varArr.length ? `
         <div style="margin-top:10px;border-top:1px dashed rgba(31,51,88,.6);padding-top:8px;">
-          <div class="hint" style="margin-bottom:6px;">Detalle por variedad</div>
-          ${top.map(makeVarietyRow).join("")}
+          <div class="hint" style="margin-bottom:6px;">Detalle por variedad y tipo de ramo</div>
+          <div class="varietyDetailList">
+            ${top.map(makeVarietyRow).join("")}
+          </div>
           ${rest.length ? `
-            <div id="${detailsId}" style="display:none;">
+            <div id="${detailsId}" class="varietyDetailList" style="display:none;margin-top:7px;">
               ${rest.map(makeVarietyRow).join("")}
             </div>
             <button class="ghost" type="button" style="margin-top:6px;" onclick="
@@ -2210,7 +2284,7 @@ function isReprocesoLaminaRecord(r) {
                 const el=document.getElementById('${detailsId}');
                 const btn=this;
                 const show=el.style.display==='none';
-                el.style.display = show ? 'block' : 'none';
+                el.style.display = show ? 'grid' : 'none';
                 btn.textContent = show ? 'ver menos' : 'ver todo';
               }).call(this)
             ">ver todo</button>
