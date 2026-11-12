@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   isValidClientRecordId,
   parseClientTimestamp,
+  parseGrado,
   parseHistoricalTimestamp,
   parseWorker,
 } = require("../server");
@@ -30,6 +31,14 @@ test("valida bonchadores y evita códigos fuera del rango operativo", () => {
   });
   assert.equal(parseWorker("B21-T25"), null);
   assert.equal(parseWorker("B01-T0"), null);
+});
+
+test("acepta BAJAS GRANEL como grado independiente", () => {
+  const expected = { grado_cm: "BAJAS GRANEL", raw: "BAJAS GRANEL" };
+  assert.deepEqual(parseGrado("BAJAS GRANEL"), expected);
+  assert.deepEqual(parseGrado("BAJAS-GRANEL"), expected);
+  assert.deepEqual(parseGrado("BAJAS_GRANEL"), expected);
+  assert.deepEqual(parseGrado("BAJASGRANEL"), expected);
 });
 
 test("las fechas históricas inválidas no se normalizan silenciosamente", () => {

@@ -245,9 +245,13 @@ function parseVariedad(code) {
 function parseGrado(code) {
   const original = String(code || "").trim().toUpperCase();
   const up = original.replace(/_/g, " ").replace(/\s+/g, " ");
-  const gradoTexto = up === "NACIONAL-GRANEL" || up === "NACIONALGRANEL"
-    ? "NACIONAL GRANEL"
-    : up;
+  const aliases = {
+    "NACIONAL-GRANEL": "NACIONAL GRANEL",
+    "NACIONALGRANEL": "NACIONAL GRANEL",
+    "BAJAS-GRANEL": "BAJAS GRANEL",
+    "BAJASGRANEL": "BAJAS GRANEL",
+  };
+  const gradoTexto = aliases[up] || up;
 
   // Grados numéricos: G60 o 60
   const mNum = gradoTexto.match(/^G?(\d{1,3})$/);
@@ -263,7 +267,7 @@ function parseGrado(code) {
   }
 
   // Grados de texto permitidos
-  const textosPermitidos = ["NACIONAL", "NACIONAL GRANEL", "ELITE", "BAJAS"];
+  const textosPermitidos = ["NACIONAL", "NACIONAL GRANEL", "ELITE", "BAJAS", "BAJAS GRANEL"];
 
   if (textosPermitidos.includes(gradoTexto)) {
     return {
@@ -909,7 +913,7 @@ app.post("/api/scan", async (req, res) => {
 
     if (!gObj) {
       return res.status(400).json({
-        error: "Grado inválido. Formato esperado: G60, 60, NACIONAL o BAJAS",
+        error: "Grado inválido. Formato esperado: G60, 60, NACIONAL, BAJAS o BAJAS GRANEL",
       });
     }
 
@@ -1167,7 +1171,7 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
     summary.addRow(["Fecha final", dateTo]);
     summary.addRow(["Ramos normales procesados", totalRamos]);
     summary.addRow(["Tallos normales procesados", totalTallos]);
-    summary.addRow(["Excluidos", "NACIONAL, BAJAS y NACIONAL GRANEL"]);
+    summary.addRow(["Excluidos", "NACIONAL, BAJAS, NACIONAL GRANEL y BAJAS GRANEL"]);
     summary.addRow([]);
     const header = summary.addRow(["Grado estimado", "% de tallos", "Ramos estimados", "Tallos estimados"]);
     styleReportHeader(header);

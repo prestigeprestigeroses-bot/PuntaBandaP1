@@ -564,7 +564,7 @@
     .manualSpecialSummary{max-height:340px;overflow:auto;border:1px solid rgba(167,139,250,.3);border-radius:10px;padding:10px}
     .manualSpecialSummary table{font-size:12px}
     .manualSpecialSummary .empty{padding:18px;text-align:center;color:var(--muted)}
-    .specialGradeTotals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:10px}
+    .specialGradeTotals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:10px}
     .specialGradeTotal{padding:9px;border:1px solid var(--line);border-radius:8px;background:rgba(10,18,32,.42)}
     .specialGradeTotal span{display:block;font-size:10px;font-weight:900;color:var(--muted)}
     .specialGradeTotal strong{display:block;margin-top:4px;font-size:22px;line-height:1;color:#fff}
@@ -572,6 +572,7 @@
     .specialGradeTotal.nacional{border-color:#facc15;box-shadow:inset 3px 0 0 #facc15}
     .specialGradeTotal.bajas{border-color:#fb7185;box-shadow:inset 3px 0 0 #fb7185}
     .specialGradeTotal.granel{border-color:#a78bfa;box-shadow:inset 3px 0 0 #a78bfa}
+    .specialGradeTotal.bajasGranel{border-color:#f472b6;box-shadow:inset 3px 0 0 #f472b6}
     .manualLaminaHint{display:block;margin-top:4px;color:#86efac;font-size:11px;font-weight:800}
     .historicalEntrySection{
       margin-top:14px;
@@ -888,6 +889,7 @@
           <option value="NACIONAL">NACIONAL</option>
           <option value="BAJAS">BAJAS</option>
           <option value="NACIONAL GRANEL">NACIONAL GRANEL</option>
+          <option value="BAJAS GRANEL">BAJAS GRANEL</option>
         </select>
       </label>
       <label>Variedad
@@ -1064,6 +1066,7 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
             <option value="NACIONAL">NACIONAL</option>
             <option value="BAJAS">BAJAS</option>
             <option value="NACIONAL GRANEL">NACIONAL GRANEL</option>
+            <option value="BAJAS GRANEL">BAJAS GRANEL</option>
             <option value="ELITE">ELITE</option>
           </select>
         </label>
@@ -1132,7 +1135,7 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
 <div id="gradeReportModal" class="reportModal hidden" role="dialog" aria-modal="true" aria-labelledby="gradeReportTitle">
   <form id="gradeReportForm" class="reportDialog">
     <h3 id="gradeReportTitle">Informe estimado de grados</h3>
-    <div class="hint" style="margin-top:6px;">Excluye Nacional, Bajas y Nacional Granel. Genera un archivo Excel sin modificar la base de datos.</div>
+    <div class="hint" style="margin-top:6px;">Excluye Nacional, Bajas, Nacional Granel y Bajas Granel. Genera un archivo Excel sin modificar la base de datos.</div>
     <div class="row2">
       <label>Fecha inicial
         <input id="gradeReportDateFrom" type="date" required />
@@ -2081,6 +2084,7 @@ function isReprocesoLaminaRecord(r) {
         porTallos: {},
         nacional: { ramos: 0, tallos: 0 },
         bajas: { ramos: 0, tallos: 0 },
+        bajasGranel: { ramos: 0, tallos: 0 },
         reproceso: { ramos: 0, tallos: 0 },
         nacionalGranel: { ramos: 0, tallos: 0 },
         elite: { ramos: 0, tallos: 0 }
@@ -2093,6 +2097,7 @@ function isReprocesoLaminaRecord(r) {
       const esNacionalGranel = gradoNormalizado === "NACIONAL GRANEL";
       const esElite = gradoNormalizado === "ELITE";
       const esBajas = gradoNormalizado === "BAJAS";
+      const esBajasGranel = gradoNormalizado === "BAJAS GRANEL";
       const esReproceso = isReprocesoLaminaRecord(r);
 
       if (esNacional) {
@@ -2103,6 +2108,11 @@ function isReprocesoLaminaRecord(r) {
       if (esBajas) {
         itW.bajas.ramos += 1;
         itW.bajas.tallos += tallos;
+      }
+
+      if (esBajasGranel) {
+        itW.bajasGranel.ramos += 1;
+        itW.bajasGranel.tallos += tallos;
       }
 
       if (esNacionalGranel) {
@@ -2120,7 +2130,7 @@ function isReprocesoLaminaRecord(r) {
         itW.reproceso.tallos += tallos;
       }
 
-      if (!esNacional && !esNacionalGranel && !esElite && !esBajas && !esReproceso && tallos > 0) {
+      if (!esNacional && !esNacionalGranel && !esElite && !esBajas && !esBajasGranel && !esReproceso && tallos > 0) {
         const tallosKey = String(tallos);
         itW.porTallos[tallosKey] = (itW.porTallos[tallosKey] || 0) + 1;
       }
@@ -2132,12 +2142,13 @@ function isReprocesoLaminaRecord(r) {
       itV.tallos += tallos;
 
       let tipoRamo = "";
-      if (!esNacional && !esNacionalGranel && !esElite && !esBajas && !esReproceso && tallos > 0) {
+      if (!esNacional && !esNacionalGranel && !esElite && !esBajas && !esBajasGranel && !esReproceso && tallos > 0) {
         tipoRamo = `X${tallos}`;
       } else if (esNacional) tipoRamo = "NACIONAL";
       else if (esNacionalGranel) tipoRamo = "NACIONAL GRANEL";
       else if (esElite) tipoRamo = "ELITE";
       else if (esBajas) tipoRamo = "BAJAS";
+      else if (esBajasGranel) tipoRamo = "BAJAS GRANEL";
       else if (esReproceso) tipoRamo = "REPROCESO";
 
       if (tipoRamo) itV.tiposRamo[tipoRamo] = (itV.tiposRamo[tipoRamo] || 0) + 1;
@@ -2175,6 +2186,7 @@ function isReprocesoLaminaRecord(r) {
         porTallos: {},
         nacional: { ramos: 0, tallos: 0 },
         bajas: { ramos: 0, tallos: 0 },
+        bajasGranel: { ramos: 0, tallos: 0 },
         reproceso: { ramos: 0, tallos: 0 },
         nacionalGranel: { ramos: 0, tallos: 0 },
         elite: { ramos: 0, tallos: 0 }
@@ -2253,6 +2265,14 @@ function isReprocesoLaminaRecord(r) {
         </div>
       ` : "";
 
+      const bajasGranelHtml = wData.bajasGranel.ramos > 0 ? `
+        <div class="bajasSummary">
+          <b>BAJAS GRANEL</b>
+          <span><strong>${wData.bajasGranel.ramos}</strong> ramos</span>
+          <span><strong>${wData.bajasGranel.tallos}</strong> tallos</span>
+        </div>
+      ` : "";
+
       const eliteHtml = wData.elite.ramos > 0 ? `
         <div class="eliteSummary">
           <b>ELITE</b>
@@ -2316,6 +2336,7 @@ function isReprocesoLaminaRecord(r) {
         ${tallosHtml}
         ${nacionalHtml}
         ${nacionalGranelHtml}
+        ${bajasGranelHtml}
         ${eliteHtml}
         ${bajasHtml}
         ${reprocesoHtml}
@@ -2707,7 +2728,7 @@ function setHistoricalEntryDefaults(force = false) {
 
 function syncManualSpecialLamina() {
   if (!manualSpecialGrade || !manualSpecialLamina) return;
-  const isGranel = normalizePlainText(manualSpecialGrade.value) === "NACIONAL GRANEL";
+  const isGranel = normalizePlainText(manualSpecialGrade.value).endsWith(" GRANEL");
   manualSpecialLamina.value = isGranel ? "L8" : "L6";
   if (manualSpecialLaminaHint) {
     manualSpecialLaminaHint.textContent = isGranel ? "L8 - TABACO" : "L6 - PVC";
@@ -2717,12 +2738,13 @@ function syncManualSpecialLamina() {
 function renderManualSpecialSummary() {
   if (!manualSpecialSummary) return;
 
-  const allowed = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL"]);
+  const allowed = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL", "BAJAS GRANEL"]);
   const map = new Map();
   const totals = {
     "NACIONAL": { ramos: 0, tallos: 0, variedades: new Set() },
     "BAJAS": { ramos: 0, tallos: 0, variedades: new Set() },
-    "NACIONAL GRANEL": { ramos: 0, tallos: 0, variedades: new Set() }
+    "NACIONAL GRANEL": { ramos: 0, tallos: 0, variedades: new Set() },
+    "BAJAS GRANEL": { ramos: 0, tallos: 0, variedades: new Set() }
   };
 
   for (const r of scans) {
@@ -2749,7 +2771,8 @@ function renderManualSpecialSummary() {
   const totalCards = [
     ["NACIONAL", "nacional"],
     ["BAJAS", "bajas"],
-    ["NACIONAL GRANEL", "granel"]
+    ["NACIONAL GRANEL", "granel"],
+    ["BAJAS GRANEL", "bajasGranel"]
   ].map(([grado, cssClass]) => {
     const item = totals[grado];
     return `
@@ -2965,9 +2988,13 @@ async function loadVariedadesCatalog() {
 function parseG(code) {
   const original = String(code || "").trim().toUpperCase();
   const up = original.replace(/_/g, " ").replace(/\s+/g, " ");
-  const gradoTexto = up === "NACIONAL-GRANEL" || up === "NACIONALGRANEL"
-    ? "NACIONAL GRANEL"
-    : up;
+  const aliases = {
+    "NACIONAL-GRANEL": "NACIONAL GRANEL",
+    "NACIONALGRANEL": "NACIONAL GRANEL",
+    "BAJAS-GRANEL": "BAJAS GRANEL",
+    "BAJASGRANEL": "BAJAS GRANEL",
+  };
+  const gradoTexto = aliases[up] || up;
 
   // Grados numéricos: G60 o 60
   const mNum = gradoTexto.match(/^G?(\d{1,3})$/);
@@ -2983,7 +3010,7 @@ function parseG(code) {
   }
 
   // Grados de texto permitidos
-  const textosPermitidos = ["NACIONAL", "NACIONAL GRANEL", "ELITE", "BAJAS"];
+  const textosPermitidos = ["NACIONAL", "NACIONAL GRANEL", "ELITE", "BAJAS", "BAJAS GRANEL"];
 
   if (textosPermitidos.includes(gradoTexto)) {
     return {
@@ -3014,7 +3041,9 @@ function parseG(code) {
 function parseFullScanCode(code) {
   const up = String(code || "").trim().toUpperCase()
     .replace(/NACIONAL[-_]GRANEL/g, "NACIONAL GRANEL")
-    .replace(/NACIONALGRANEL/g, "NACIONAL GRANEL");
+    .replace(/NACIONALGRANEL/g, "NACIONAL GRANEL")
+    .replace(/BAJAS[-_]GRANEL/g, "BAJAS GRANEL")
+    .replace(/BAJASGRANEL/g, "BAJAS GRANEL");
   const parts = up.split("-");
 
   // La etiqueta puede terminar en S<semana><dia>, por ejemplo S266.
@@ -3561,7 +3590,7 @@ async function submitManualSpecialRecords() {
   const varietyObj = parseV(varietyCode);
   const gradeObj = parseG(gradeCode);
   const laminaObj = parseL(laminaCode);
-  const allowedGrades = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL"]);
+  const allowedGrades = new Set(["NACIONAL", "BAJAS", "NACIONAL GRANEL", "BAJAS GRANEL"]);
 
   if (!workerObj || !varietyObj || !gradeObj || !allowedGrades.has(gradeObj.grado) || !laminaObj || !/^(P1|P2)$/.test(fincaCode) || !Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
     manualSpecialStatus.textContent = "Revise bonchador, variedad, grado, lámina, finca y cantidad (1 a 500).";
