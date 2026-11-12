@@ -75,3 +75,15 @@ test("los registros manuales múltiples reciben identificadores independientes",
   const html = fs.readFileSync(htmlPath, "utf8");
   assert.match(html, /sendToServer\(\{ \.\.\.payload \}\)/);
 });
+
+test("la captura principal usa código completo y no conserva el flujo manual por pasos", () => {
+  const htmlPath = path.join(__dirname, "..", "public", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.doesNotMatch(html, /id="scanProgressBox"/);
+  assert.doesNotMatch(html, /id="manualScan"/);
+  assert.doesNotMatch(html, /function trySendCombo\(/);
+  assert.doesNotMatch(html, /pendingWorker/);
+  assert.doesNotMatch(html, /x6/i);
+  assert.doesNotMatch(html, /ficha x6/i);
+  assert.match(html, /INCOMPLETO: escanee la etiqueta completa/);
+});

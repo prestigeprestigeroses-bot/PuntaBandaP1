@@ -441,54 +441,6 @@
   text-transform: uppercase;
 }
 
-.scan-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 800;
-  border: 1px solid rgba(155,176,208,.35);
-  background: rgba(10,18,32,.45);
-  color: #9bb0d0;
-}
-
-.scan-step b {
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 950;
-}
-
-.scan-step.done {
-  border-color: rgba(57,255,20,.95);
-  background: rgba(57,255,20,.24);
-  color: #b6ff00;
-  box-shadow:
-    0 0 12px rgba(57,255,20,.55),
-    inset 0 0 12px rgba(57,255,20,.18);
-}
-
-.scan-step.pending {
-  border-color: rgba(255,23,68,.95);
-  background: rgba(255,23,68,.24);
-  color: #ff5c7a;
-  box-shadow:
-    0 0 12px rgba(255,23,68,.58),
-    inset 0 0 12px rgba(255,23,68,.18);
-}
-
-.scan-missing-text {
-  font-size: 12px;
-  font-weight: 800;
-  color: #ff5c7a;
-  text-shadow: 0 0 10px rgba(255,23,68,.55);
-}
-
-.scan-missing-text.ready {
-  color: #86efac;
-}
-
 .scan-sticky-bar {
   position: sticky;
   top: 0;
@@ -660,79 +612,6 @@
   border-color: rgba(148,163,184,.35);
 }
 
-.x6Panel {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(580px, calc(100vw - 36px));
-  z-index: 120;
-  border: 2px solid rgba(34,197,94,.9);
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(34,197,94,.28), transparent 38%),
-    linear-gradient(180deg, rgba(6,95,70,.98), rgba(3,78,63,.98));
-  box-shadow: 0 0 28px rgba(34,197,94,.42), 0 16px 38px rgba(0,0,0,.42);
-  padding: 10px;
-}
-
-.x6Panel.hidden { display: none; }
-.x6Title { display:flex; justify-content:space-between; gap:8px; align-items:center; font-weight:950; font-size:15px; text-transform:uppercase; color:#fff; }
-.x6Meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-.x6Meta .pill { width:auto; justify-content:center; font-size:12px; padding:5px 9px; background:rgba(15,118,110,.75); color:#fff; }
-.x6Ramos { display:flex; flex-direction:column; gap:5px; margin-top:8px; }
-.x6Ramo {
-  border:1px solid rgba(134,239,172,.65);
-  border-radius:9px;
-  padding:8px 10px;
-  text-align:left;
-  font-weight:900;
-  color:#cbd5e1;
-  background:rgba(5,150,105,.58);
-  min-height: 44px;
-  display:grid;
-  grid-template-columns:46px 1fr 62px 58px 40px;
-  align-items:center;
-  gap:8px;
-  cursor:pointer;
-}
-.x6Ramo.ready {
-  background:rgba(14,165,233,.72);
-  border-color:rgba(125,211,252,.9);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
-}
-.x6Ramo .x6RamoTitle { font-size:16px; color:#fff; }
-.x6Ramo .x6RamoLine { font-size:14px; color:#fff; }
-.x6Ramo .x6RemoveOne {
-  width:38px;
-  padding:5px 0;
-  border-radius:9px;
-  background:#991b1b;
-  color:white;
-  border:1px solid rgba(252,165,165,.55);
-  font-size:16px;
-  font-weight:950;
-}
-.x6Ramo.current {
-  color:#052e16;
-  background:#1ee85a;
-  border-color:#86efac;
-  box-shadow:0 0 24px rgba(57,255,20,.82), inset 0 0 0 2px rgba(255,255,255,.2);
-}
-.x6Ramo.sent {
-  color:#052e16;
-  background:#39ff14;
-  border-color:#bbf7d0;
-}
-.x6Ramo.removed {
-  opacity:.45;
-  text-decoration:line-through;
-}
-.x6Actions { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:10px; }
-.x6Actions .ghost { width:100%; }
-.x6Actions #btnX6Send { background:#16a34a; border-color:#86efac; color:#fff; }
-.x6Actions #btnX6Remove { display:none; }
-
 .reportAccessButton{
   width:auto;
   padding:6px 10px;
@@ -804,18 +683,6 @@
     <div class="card right card-rendimiento">
     <div class="split scan-sticky-bar">
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-  <div id="scanProgressBox" class="scan-progress-box">
-    <span id="stepWorker" class="scan-step pending">Bonchador</span>
-    <span id="stepVariedad" class="scan-step pending">Variedad</span>
-    <span id="stepGrado" class="scan-step pending">Grado</span>
-    <span id="stepLamina" class="scan-step pending">Lámina</span>
-  </div>
-
-  <div id="scanMissingText" class="scan-missing-text">
-    Faltan 4 escaneos
-  </div>
-</div>
     <div id="offlineStatus" class="pill mono" style="display:none;"></div>
   </div>
 
@@ -968,7 +835,7 @@
 
       <details class="scanBox">
         <summary class="collapsibleSummary">
-          <span>Escaneo y entrada manual</span>
+          <span>Escaneo por pistola</span>
           <span class="pill mono">F9 para activar</span>
         </summary>
         <div class="scanToolsBody">
@@ -978,25 +845,10 @@
         </div>
 
         <div class="hint" style="margin-top:8px;">
-          Bonchador pendiente: <span id="lastWorkerForV" class="mono warnTxt">—</span><br>
-Código V pendiente: <span id="lastVPending" class="mono warnTxt">—</span><br>
-Grado pendiente: <span id="lastGPending" class="mono warnTxt">—</span><br>
-Lámina pendiente: <span id="lastLPending" class="mono warnTxt">—</span><br><br>
-
-          Código 1 (bonchador + tallos): <span class="mono">B01-T20</span><br>
-Código 2 (variedad): <span class="mono">V01</span><br>
-Código 3 (grado): <span class="mono">G60</span><br>
-Código 4 (lámina): <span class="mono">L1</span><br><br>
-          • <b>B01-T20</b> = bonchador B01 con 20 tallos<br>
-          • <b>V01-60</b> = variedad V01 con grado 60<br>
-          • <b>L1</b> = lámina 1<br><br>
-
-          El sistema enviará el registro cuando tenga los 3 escaneos completos.
-          Se puede escanear en cualquier orden.
+          Escanee una etiqueta completa con la pistola.<br>
+          Ejemplo: <span class="mono">B01-T20-G60-L1-V01-P1</span><br>
+          El registro se enviará inmediatamente; los códigos parciales no se guardan.
         </div>
-
-        <label style="margin-top:10px;">Entrada manual (teclado)</label>
-        <input id="manualScan" class="mono" placeholder="Ej: B01-T20  ó  V01  ó  G60  ó  L1  (Enter)" />
 
         <div class="split" style="margin-top:8px; gap:8px;">
           <div class="hint">Último envío: <span id="lastScan" class="mono warnTxt">—</span></div>
@@ -1154,26 +1006,6 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
   </form>
 </div>
 
-<div id="x6Panel" class="x6Panel hidden">
-  <div class="x6Title">
-    <span>T6: ESCANEE VARIEDAD POR RAMO</span>
-    <span id="x6Status" class="pill mono">Esperando variedad</span>
-  </div>
-  <div class="x6Meta">
-    <span class="pill mono">Bonchador: <b id="x6Worker">—</b></span>
-    <span class="pill mono">Variedad: <b id="x6Variety">—</b></span>
-    <span class="pill mono">Grado fijo: <b>40</b></span>
-    <span class="pill mono">Lámina fija: <b>PVC</b></span>
-  </div>
-  <div id="x6Ramos" class="x6Ramos"></div>
-  <div class="x6Actions">
-    <button id="btnX6Send" class="ghost" type="button">Enviar</button>
-    <button id="btnX6Remove" class="ghost" type="button">Quitar último ramo pendiente</button>
-    <button id="btnX6Add" class="ghost" type="button">Agregar ramo</button>
-    <button id="btnX6Close" class="ghost" type="button">Cancelar</button>
-  </div>
-</div>
-
 <script>
 
   
@@ -1187,7 +1019,6 @@ Código 4 (lámina): <span class="mono">L1</span><br><br>
   const dot = $("dot"), st = $("st"), mode = $("mode");
   const pillApi = $("pillApi"), capState = $("capState");
   const btnFocus = $("btnFocus");
-  const manualScan = $("manualScan");
   const scanInput = $("scanInput");
   const lastScanEl = $("lastScan");
   const btnRefresh = $("btnRefresh");
@@ -1263,29 +1094,8 @@ const tbVariedad = $("tbVariedad");
   const recordRemovalCount = $("recordRemovalCount");
   const recordRemovalRows = $("recordRemovalRows");
   const recordRemovalStatus = $("recordRemovalStatus");
-  const scanProgressBox = $("scanProgressBox");
-const stepWorker = $("stepWorker");
-const stepVariedad = $("stepVariedad");
-const stepGrado = $("stepGrado");
-const stepLamina = $("stepLamina");
-const scanMissingText = $("scanMissingText");
-
-  const lastWorkerEl = $("lastWorkerForV");
-  const lastVEl = $("lastVPending");
-const lastGEl = $("lastGPending");
-const lastLEl = $("lastLPending");
-
   const btnSerial = $("btnSerial");
   const serialState = $("serialState");
-  const x6Panel = $("x6Panel");
-  const x6Status = $("x6Status");
-  const x6Worker = $("x6Worker");
-  const x6Variety = $("x6Variety");
-  const x6Ramos = $("x6Ramos");
-  const btnX6Send = $("btnX6Send");
-  const btnX6Remove = $("btnX6Remove");
-  const btnX6Add = $("btnX6Add");
-  const btnX6Close = $("btnX6Close");
 
   let captureEnabled = false;
 
@@ -1301,12 +1111,6 @@ const lastLEl = $("lastLPending");
   let dateRolloverInProgress = false;
   let offlineSyncPromise = null;
 
-  let pendingWorker = null; // { raw, code, tallos }
-  let pendingV = null;      // { raw, variedad, grado }
-  let pendingL = null;      // { raw, id }
-  let pendingG = null;
-  let x6Batch = null;
-  let x6LastVariety = null;
   let recordRemovalRecords = [];
   const recentScanHighlights = new Map();
 
@@ -1341,7 +1145,6 @@ const lastLEl = $("lastLPending");
       historyModeText.className = "hint " + (history ? "warnTxt" : "okTxt");
     }
 
-    if (manualScan) manualScan.disabled = history;
     if (btnSerial) btnSerial.disabled = history;
     if (btnFocus) btnFocus.disabled = history;
     for (const control of [manualSpecialWorker, manualSpecialGrade, manualSpecialVariety, manualSpecialLamina, manualSpecialFinca, manualSpecialQuantity, manualSpecialSubmit]) {
@@ -3105,46 +2908,6 @@ function parseFullScanCode(code) {
   };
 }
 
-  function detectBarcodeType(code) {
-  const up = String(code || "").trim().toUpperCase();
-  const b = parseBonchador(up);
-  const v = parseV(up);
-  const g = parseG(up);
-  const l = parseL(up);
-
-  return {
-    up,
-    isB: !!b,
-    isV: !!v,
-    isG: !!g,
-    isL: !!l,
-    b,
-    v,
-    g,
-    l
-  };
-}
-
-function displayWorkerScan() {
-  if (!pendingWorker) return "";
-
-  const code = pendingWorker.code || pendingWorker.raw;
-  const name = String(workerNameMap[code] || "").trim();
-
-  if (name && name !== code) return `${name} (${pendingWorker.raw})`;
-  return pendingWorker.raw;
-}
-
-function displayVariedadScan() {
-  if (!pendingV) return "";
-
-  const code = pendingV.variedad || pendingV.raw;
-  const name = String(variedadNameMap[code] || "").trim();
-
-  if (name && name !== code) return `${name} (${code})`;
-  return code;
-}
-
 function displayWorkerLabel(workerObj) {
   if (!workerObj) return "";
 
@@ -3167,22 +2930,6 @@ function displayVariedadLabel(variedadObj) {
   return raw;
 }
 
-function displayGradoScan() {
-  if (!pendingG) return "";
-  return `Grado ${pendingG.grado || pendingG.raw}`;
-}
-
-function displayLaminaScan() {
-  if (!pendingL) return "";
-
-  const code = pendingL.id || pendingL.raw;
-  const name = String(laminaNameMap[code] || "").trim();
-
-  if (code === "L9") return "Lámina Amarilla (L9)";
-  if (name && name !== code) return `${displayLaminaLabel(code, name)} (${code})`;
-  return code;
-}
-
 async function loadVariedadName(vObj) {
   const code = vObj?.variedad || vObj?.raw;
   if (!code || variedadNameMap[code]) return;
@@ -3192,8 +2939,6 @@ async function loadVariedadName(vObj) {
     const data = await res.json().catch(() => ({}));
     if (res.ok && data?.nombre) {
       variedadNameMap[code] = data.nombre;
-      updateScanProgressUI();
-      renderX6Panel();
     }
   } catch {}
 }
@@ -3204,7 +2949,6 @@ async function loadLaminaName(lObj) {
 
   if (code === "L9") {
     laminaNameMap[code] = "Lámina Amarilla";
-    updateScanProgressUI();
     return;
   }
 
@@ -3213,307 +2957,8 @@ async function loadLaminaName(lObj) {
     const data = await res.json().catch(() => ({}));
     if (res.ok && data?.nombre) {
       laminaNameMap[code] = data.nombre;
-      updateScanProgressUI();
     }
   } catch {}
-}
-
-function renderX6Panel() {
-  if (!x6Panel || !x6Batch) {
-    x6Panel?.classList.add("hidden");
-    return;
-  }
-
-  x6Panel.classList.remove("hidden");
-  x6Worker.textContent = displayWorkerLabel(x6Batch.worker);
-  x6Variety.textContent = displayVariedadLabel(x6Batch.ramos[x6Batch.current]?.variety) || "Escanea variedad";
-  const filledCount = x6Batch.ramos.filter(item => item.variety && !item.removed).length;
-  x6Status.textContent = x6Batch.sending
-    ? `Enviando ramo ${Math.min(x6Batch.current + 1, x6Batch.ramos.length)}`
-    : `Variedades ${filledCount}/${x6Batch.ramos.filter(item => !item.removed).length}`;
-
-  x6Ramos.innerHTML = "";
-  for (const item of x6Batch.ramos) {
-    const div = document.createElement("div");
-    div.className = "x6Ramo";
-    div.dataset.index = String(item.index);
-    if (item.sent) div.classList.add("sent");
-    if (item.removed) div.classList.add("removed");
-    if (item.variety && !item.sent && !item.removed) div.classList.add("ready");
-    if (!item.sent && !item.removed && item.index === x6Batch.current) div.classList.add("current");
-    const variety = displayVariedadLabel(item.variety) || "ESCANEE VARIEDAD";
-    div.innerHTML = `
-      <div class="x6RamoTitle">#${item.index + 1}</div>
-      <div class="x6RamoLine"><b>${escapeHtml(variety)}</b></div>
-      <div class="x6RamoLine">G40</div>
-      <div class="x6RamoLine">PVC</div>
-      <button class="x6RemoveOne" type="button" data-index="${item.index}" ${item.sent || item.removed ? "disabled" : ""}>X</button>
-    `;
-    x6Ramos.appendChild(div);
-  }
-
-  x6Ramos.querySelectorAll(".x6RemoveOne").forEach(btn => {
-    btn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      removeX6Ramo(Number(btn.dataset.index));
-    });
-  });
-
-  x6Ramos.querySelectorAll(".x6Ramo").forEach(row => {
-    row.addEventListener("click", () => selectX6Ramo(Number(row.dataset.index)));
-  });
-}
-
-function openX6Batch(workerObj) {
-  if (x6Batch?.timer) clearTimeout(x6Batch.timer);
-
-  x6Batch = {
-    worker: workerObj,
-    variety: null,
-    current: 0,
-    sending: false,
-    ramos: Array.from({ length: 5 }, (_, index) => ({
-      index,
-      sent: false,
-      removed: false,
-      variety: null
-    }))
-  };
-
-  lastScanEl.textContent = `${workerObj.raw} - ficha x6 abierta`;
-  renderX6Panel();
-}
-
-function closeX6Batch(message = "Ficha x6 cerrada") {
-  if (x6Batch?.timer) clearTimeout(x6Batch.timer);
-  x6Batch = null;
-  renderX6Panel();
-  lastScanEl.textContent = message;
-}
-
-function setX6Variety(vObj) {
-  x6LastVariety = vObj;
-
-  if (!x6Batch) return false;
-
-  const target = x6Batch.ramos.find(item => !item.sent && !item.removed && item.index === x6Batch.current)
-    || x6Batch.ramos.find(item => !item.sent && !item.removed && item.index > x6Batch.current)
-    || x6Batch.ramos.find(item => !item.sent && !item.removed);
-
-  if (!target) {
-    lastScanEl.textContent = "Ficha x6: no hay ramos pendientes para asignar variedad";
-    renderX6Panel();
-    return true;
-  }
-
-  for (const item of x6Batch.ramos) {
-    if (!item.sent && !item.removed && item.index >= target.index) {
-      item.variety = vObj;
-    }
-  }
-
-  x6Batch.variety = vObj;
-  const next = x6Batch.ramos.find(item => !item.sent && !item.removed && item.index > target.index);
-  x6Batch.current = next ? next.index : target.index;
-  lastScanEl.textContent = `Ficha x6: desde ramo ${target.index + 1} usa ${vObj.raw}`;
-  renderX6Panel();
-  return true;
-}
-
-function removeX6Ramo(index) {
-  if (!x6Batch) return;
-
-  const item = x6Batch.ramos.find(r => r.index === index);
-  if (!item || item.sent) return;
-
-  item.removed = true;
-  item.variety = null;
-  const next = x6Batch.ramos.find(r => !r.sent && !r.removed && !r.variety);
-  if (next) x6Batch.current = next.index;
-  lastScanEl.textContent = `Ficha x6: ramo ${index + 1} quitado`;
-  renderX6Panel();
-}
-
-function selectX6Ramo(index) {
-  if (!x6Batch || x6Batch.sending) return;
-
-  const item = x6Batch.ramos.find(r => r.index === index);
-  if (!item || item.sent || item.removed) return;
-
-  x6Batch.current = item.index;
-  lastScanEl.textContent = `Ficha x6: ramo ${index + 1} seleccionado, escanee variedad para cambiarlo`;
-  renderX6Panel();
-}
-
-function addX6Ramo() {
-  if (!x6Batch || x6Batch.sending) return;
-
-  const nextIndex = x6Batch.ramos.length
-    ? Math.max(...x6Batch.ramos.map(item => item.index)) + 1
-    : 0;
-
-  x6Batch.ramos.push({
-    index: nextIndex,
-    sent: false,
-    removed: false,
-    variety: x6Batch.variety
-  });
-  x6Batch.current = nextIndex;
-  lastScanEl.textContent = `Ficha x6: ramo ${nextIndex + 1} agregado, escanee variedad`;
-  renderX6Panel();
-}
-
-function removeX6PendingRamo() {
-  if (!x6Batch) return;
-
-  const pending = [...x6Batch.ramos].reverse().find(item => !item.sent && !item.removed);
-  if (!pending) return;
-
-  removeX6Ramo(pending.index);
-}
-
-async function sendX6Batch() {
-  if (!x6Batch || x6Batch.sending) return;
-
-  const activePending = x6Batch.ramos.filter(item => !item.sent && !item.removed);
-  if (!activePending.length) {
-    lastScanEl.textContent = "Ficha x6: no hay ramos pendientes para enviar";
-    renderX6Panel();
-    return;
-  }
-
-  const missing = activePending.find(item => !item.variety);
-  if (missing) {
-    x6Batch.current = missing.index;
-    lastScanEl.textContent = `Ficha x6: falta variedad en ramo ${missing.index + 1}`;
-    renderX6Panel();
-    return;
-  }
-
-  if (x6Batch.timer) {
-    clearTimeout(x6Batch.timer);
-    x6Batch.timer = null;
-  }
-
-  x6Batch.sending = true;
-  renderX6Panel();
-
-  for (const item of x6Batch.ramos) {
-    if (!x6Batch) return;
-    if (item.sent || item.removed) continue;
-
-    x6Batch.current = item.index;
-    renderX6Panel();
-
-    const payload = {
-      worker: x6Batch.worker.raw,
-      variedad: item.variety.raw,
-      grado: "G40",
-      lamina: "PVC"
-    };
-
-    const out = await sendToServer(payload);
-    if (!out.ok) {
-      x6Batch.sending = false;
-      lastScanEl.textContent = `${payload.worker} / ${payload.variedad} / G40 / PVC (${out.data?.error || "ERROR"})`;
-      renderX6Panel();
-      return;
-    }
-
-    item.sent = true;
-    if (out.offline) {
-      const pendientes = getOfflineQueue().length;
-      showOfflineStatus(`CONEXION LIMITADA - ${pendientes} registro(s) en cola`, "warn");
-      renderAll();
-    }
-    if (out.data?.reg) {
-      addScanIfNotExists(out.data.reg);
-      renderFast();
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 250));
-  }
-
-  const enviados = x6Batch?.ramos.filter(item => item.sent).length || 0;
-  closeX6Batch(`Ficha x6 completada: ${enviados} ramo(s) enviados`);
-}
-
-  function setLastWorkerUI(txt) {
-    if (!lastWorkerEl) return;
-    if (txt) { lastWorkerEl.textContent = txt; lastWorkerEl.className = "mono okTxt"; }
-    else { lastWorkerEl.textContent = "—"; lastWorkerEl.className = "mono warnTxt"; }
-  }
-
-  function setLastVUI(txt) {
-    if (!lastVEl) return;
-    if (txt) { lastVEl.textContent = txt; lastVEl.className = "mono okTxt"; }
-    else { lastVEl.textContent = "—"; lastVEl.className = "mono warnTxt"; }
-  }
-  function setLastGUI(txt) {
-  if (!lastGEl) return;
-
-  if (txt) {
-    lastGEl.textContent = txt;
-    lastGEl.className = "mono okTxt";
-  } else {
-    lastGEl.textContent = "—";
-    lastGEl.className = "mono warnTxt";
-  }
-}
-
-  function setLastLUI(txt) {
-    if (!lastLEl) return;
-    if (txt) { lastLEl.textContent = txt; lastLEl.className = "mono okTxt"; }
-    else { lastLEl.textContent = "—"; lastLEl.className = "mono warnTxt"; }
-  }
-
-  function updateScanProgressUI() {
-  const steps = [
-    { el: stepWorker, label: "Bonchador", done: !!pendingWorker, value: displayWorkerScan() },
-    { el: stepVariedad, label: "Variedad", done: !!pendingV, value: displayVariedadScan() },
-    { el: stepGrado, label: "Grado", done: !!pendingG, value: displayGradoScan() },
-    { el: stepLamina, label: "Lámina", done: !!pendingL, value: displayLaminaScan() }
-  ];
-
-  const faltantes = [];
-
-  for (const s of steps) {
-    if (!s.el) continue;
-
-    s.el.classList.toggle("done", s.done);
-    s.el.classList.toggle("pending", !s.done);
-
-    s.el.innerHTML = s.done
-      ? `<span>${escapeHtml(s.label)}</span><b>${escapeHtml(s.value)}</b>`
-      : `<span>${escapeHtml(s.label)}</span><b>Falta</b>`;
-
-    if (!s.done) faltantes.push(s.label);
-  }
-
-  if (!scanMissingText) return;
-
-  if (faltantes.length === 0) {
-    scanMissingText.textContent = "Registro completo. Enviando...";
-    scanMissingText.classList.add("ready");
-  } else {
-    scanMissingText.textContent = `Falta: ${faltantes.join(", ")}`;
-    scanMissingText.classList.remove("ready");
-  }
-}
-
-  function limpiarEscaneoPendiente(mensaje = "Escaneo cancelado") {
-  pendingWorker = null;
-  pendingV = null;
-  pendingG = null;
-  pendingL = null;
-
-  setLastWorkerUI(null);
-  setLastVUI(null);
-  setLastGUI(null);
-  setLastLUI(null);
-
-  lastScanEl.textContent = mensaje;
-  updateScanProgressUI();
 }
 
   async function sendToServer(payload) {
@@ -3976,98 +3421,9 @@ async function generateGradeEstimateExcel() {
   }
 }
 
-  async function trySendCombo() {
-  if (!(pendingWorker && pendingV && pendingG && pendingL)) return;
-
-  const combo = {
-    worker: pendingWorker,
-    variedad: pendingV,
-    grado: pendingG,
-    lamina: pendingL
-  };
-
-  const payload = {
-    worker: combo.worker.raw,
-    variedad: combo.variedad.raw,
-    grado: combo.grado.raw,
-    lamina: combo.lamina.raw
-  };
-
-  const comboText = `${payload.worker} / ${payload.variedad} / ${payload.grado} / ${payload.lamina}`;
-
-  if (pendingWorker === combo.worker && pendingV === combo.variedad && pendingG === combo.grado && pendingL === combo.lamina) {
-  pendingWorker = null;
-  pendingV = null;
-  pendingG = null;
-  pendingL = null;
-
-  setLastWorkerUI(null);
-  setLastVUI(null);
-  setLastGUI(null);
-  setLastLUI(null);
-
-  lastScanEl.textContent = `${comboText} (enviando...)`;
-  updateScanProgressUI();
-  }
-
-  sendToServer(payload).then(async (out) => {
-
-  if (!out.ok) {
-    const msg = out.data?.error || "ERROR";
-    lastScanEl.textContent = `${comboText} (${msg})`;
-    return;
-  }
-
-  if (out.offline) {
-  lastScanEl.textContent = `${comboText} (SIN INTERNET, guardado offline)`;
-
-  const pendientes = getOfflineQueue().length;
-  showOfflineStatus(`CONEXION LIMITADA - ${pendientes} registro(s) en cola`, "warn");
-  renderAll();
-
-  if (typeof playOkSound === "function") {
-    playOkSound();
-  }
-
-  return;
-}
-
-  // Caso normal: guardado en servidor
-  if (out.data?.reg) {
-  addScanIfNotExists(out.data.reg);
-  lastScanEl.textContent = `${comboText} (registrado)`;
-  renderAll();
-
-  if (typeof playOkSound === "function") {
-    playOkSound();
-  }
-} else {
-  await refreshAll();
-}
-}).catch(() => {
-  lastScanEl.textContent = `${comboText} (ERROR ENVIANDO)`;
-});
-}
-
 async function sendFullScanCode(full) {
   const payload = full.payload;
   const comboText = `${payload.worker} / ${payload.variedad || "SIN VARIEDAD"} / ${payload.grado} / ${payload.lamina}`;
-
-  if (x6Batch) {
-    if (x6Batch.timer) clearTimeout(x6Batch.timer);
-    x6Batch = null;
-    renderX6Panel();
-  }
-
-  pendingWorker = null;
-  pendingV = null;
-  pendingG = null;
-  pendingL = null;
-  setLastWorkerUI(null);
-  setLastVUI(null);
-  setLastGUI(null);
-  setLastLUI(null);
-  updateScanProgressUI();
 
   loadVariedadName(full.v);
   loadLaminaName(full.l);
@@ -4161,12 +3517,6 @@ async function performOfflineSync() {
 
   const up = String(rawCode || "").trim().toUpperCase();
 
-  // Código especial para cancelar el registro en construcción
-  if (up === "E123") {
-    limpiarEscaneoPendiente("E123 → REGISTRO EN CONSTRUCCIÓN BORRADO");
-    return;
-  }
-
   const fullScan = parseFullScanCode(up);
   if (fullScan) {
     lastScanEl.textContent = up;
@@ -4174,56 +3524,7 @@ async function performOfflineSync() {
     return;
   }
 
-  const { isB, isV, isG, isL, b, v, g, l } = detectBarcodeType(up);
-  lastScanEl.textContent = up;
-
-  if (!isB && !isV && !isG && !isL) {
-    lastScanEl.textContent = up + " (NO RECONOCIDO)";
-    return;
-  }
-
-  if (isV && setX6Variety(v)) {
-    loadVariedadName(v);
-    return;
-  }
-
-  if (isB) {
-  if (b.tallos === 6) {
-    openX6Batch(b);
-    return;
-  }
-
-  pendingWorker = b;
-  setLastWorkerUI(pendingWorker.raw);
-  updateScanProgressUI();
-  await trySendCombo();
-  return;
-}
-
-if (isV) {
-  pendingV = v;
-  setLastVUI(pendingV.raw);
-  updateScanProgressUI();
-  loadVariedadName(pendingV);
-  await trySendCombo();
-  return;
-}
-
-if (isG) {
-  pendingG = g;
-  setLastGUI(pendingG.raw);
-  updateScanProgressUI();
-  await trySendCombo();
-  return;
-}
-
-if (isL) {
-  pendingL = l;
-  setLastLUI(pendingL.raw);
-  updateScanProgressUI();
-  loadLaminaName(pendingL);
-  await trySendCombo();
-}
+  lastScanEl.textContent = `${up} (INCOMPLETO: escanee la etiqueta completa)`;
 }
 let globalScanBuffer = "";
 let globalScanTimer = null;
@@ -4279,14 +3580,6 @@ document.addEventListener("keydown", async (e) => {
     }, 700);
   }
 }, true);
-  manualScan.addEventListener("keydown", async (e) => {
-    if (e.key !== "Enter") return;
-    const code = (manualScan.value || "").trim();
-    manualScan.value = "";
-    if (!code) return;
-    await postScan(code);
-  });
-
   btnFocus.addEventListener("click", focusScan);
   manualSpecialGrade?.addEventListener("change", syncManualSpecialLamina);
   manualSpecialForm?.addEventListener("submit", async (e) => {
@@ -4357,10 +3650,6 @@ document.addEventListener("keydown", async (e) => {
       closeGradeReportModal();
     }
   });
-  btnX6Remove?.addEventListener("click", removeX6PendingRamo);
-  btnX6Add?.addEventListener("click", addX6Ramo);
-  btnX6Send?.addEventListener("click", sendX6Batch);
-  btnX6Close?.addEventListener("click", () => closeX6Batch());
   btnViewDate?.addEventListener("click", async () => {
     const value = historyDate?.value || "";
     if (!value) return;
@@ -4782,8 +4071,6 @@ async function handleLocalDateRollover() {
     updateOfflineStatusFromQueue();
     renderAll();
     installResizeObservers();
-    updateScanProgressUI();
-
     setInterval(handleLocalDateRollover, 30000);
 
     setInterval(async () => {
