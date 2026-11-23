@@ -4,10 +4,13 @@ const path = require("node:path");
 const test = require("node:test");
 
 const {
+  buildWorkerPerformance,
+  formatMinutesAsHHMM,
   isValidClientRecordId,
   parseClientTimestamp,
   parseGrado,
   parseHistoricalTimestamp,
+  parseWorkedTimeToMinutes,
   parseWorker,
 } = require("../server");
 
@@ -86,4 +89,49 @@ test("la captura principal usa código completo y no conserva el flujo manual po
   assert.doesNotMatch(html, /x6/i);
   assert.doesNotMatch(html, /ficha x6/i);
   assert.match(html, /INCOMPLETO: escanee la etiqueta completa/);
+});
+
+test("convierte y valida las horas trabajadas en formato HH:MM", () => {
+  assert.equal(parseWorkedTimeToMinutes("08:00"), 480);
+  assert.equal(parseWorkedTimeToMinutes("7:30"), 450);
+  assert.equal(parseWorkedTimeToMinutes("24:00"), null);
+  assert.equal(parseWorkedTimeToMinutes("08:60"), null);
+  assert.equal(formatMinutesAsHHMM(450), "07:30");
+  assert.equal(formatMinutesAsHHMM(960), "16:00");
+});
+
+test("calcula rendimiento por trabajador descontando 30 minutos por día activo", () => {
+  const rows = [
+    { work_date: "2026-11-20", worker: "B01", worker_name: "Pareja 1", ramos: 10, tallos: 250 },
+    { work_date: "2026-11-21", worker: "B01", worker_name: "Pareja 1", ramos: 8, tallos: 200 },
+    { work_date: "2026-11-20", worker: "B02", worker_name: "Pareja 2", ramos: 12, tallos: 300 },
+  ];
+
+  const result = buildWorkerPerformance(rows, 480, 30);
+  assert.equal(result.length, 2);
+  assert.deepEqual(result[0], {
+    worker: "B01",
+    workerName: "Pareja 1",
+    activeDays: 2,
+    ramos: 18,
+    tallos: 450,
+    scheduledTotalMinutes: 960,
+    lunchTotalMinutes: 60,
+    effectiveTotalMinutes: 900,
+    stemsPerHour: 30,
+    over400: true,
+  });
+  assert.equal(result[1].effectiveTotalMinutes, 450);
+  assert.equal(result[1].stemsPerHour, 40);
+  assert.equal(result[1].over400, false);
+});
+
+test("el formulario de rendimiento conserva dos fechas fijas y las horas trabajadas", () => {
+  const htmlPath = path.join(__dirname, "..", "public", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.match(html, /id="gradeReportDateFrom"/);
+  assert.match(html, /id="gradeReportDateTo"/);
+  assert.match(html, /id="gradeReportWorkedTime"/);
+  assert.match(html, /\/api\/reports\/worker-performance/);
+  assert.match(html, /Más de 400 tallos/);
 });

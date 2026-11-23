@@ -1053,6 +1053,291 @@ function styleReportHeader(row) {
   row.height = 22;
 }
 
+function parseWorkedTimeToMinutes(value) {
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(String(value || "").trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || hours > 23) return null;
+  return hours * 60 + minutes;
+}
+
+function formatMinutesAsHHMM(value) {
+  const safeMinutes = Math.max(0, Math.round(Number(value) || 0));
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function buildWorkerPerformance(rows, scheduledMinutes, lunchMinutes = 30) {
+  const effectiveMinutesPerDay = Math.max(0, scheduledMinutes - lunchMinutes);
+  const byWorker = new Map();
+
+  for (const source of rows || []) {
+    const worker = String(source.worker || "SIN CÓDIGO").trim().toUpperCase() || "SIN CÓDIGO";
+    const current = byWorker.get(worker) || {
+      worker,
+      workerName: String(source.worker_name || worker).trim() || worker,
+      activeDays: 0,
+      ramos: 0,
+      tallos: 0,
+    };
+    current.activeDays += 1;
+    current.ramos += Number(source.ramos || 0);
+    current.tallos += Number(source.tallos || 0);
+    if (source.worker_name) current.workerName = String(source.worker_name).trim() || current.workerName;
+    byWorker.set(worker, current);
+  }
+
+  return [...byWorker.values()]
+    .map((item) => {
+      const scheduledTotalMinutes = item.activeDays * scheduledMinutes;
+      const lunchTotalMinutes = item.activeDays * lunchMinutes;
+      const effectiveTotalMinutes = item.activeDays * effectiveMinutesPerDay;
+      return {
+        ...item,
+        scheduledTotalMinutes,
+        lunchTotalMinutes,
+        effectiveTotalMinutes,
+        stemsPerHour: effectiveTotalMinutes > 0
+          ? item.tallos / (effectiveTotalMinutes / 60)
+          : null,
+        over400: item.tallos > 400,
+      };
+    })
+    .sort((a, b) => a.worker.localeCompare(b.worker, "es", { numeric: true }));
+}
+
+app.post("/api/reports/worker-performance", async (req, res) => {
+  try {
+    const dateFrom = String(req.body?.dateFrom || "").trim();
+    const dateTo = String(req.body?.dateTo || "").trim();
+    const workedTime = String(req.body?.workedTime || "").trim();
+    const password = req.body?.password;
+
+    if (!secureTextEquals(password, REPORT_PASSWORD)) {
+      return res.status(401).json({ error: "Contraseña incorrecta" });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      return res.status(400).json({ error: "Rango de fechas inválido" });
+    }
+
+    const scheduledMinutes = parseWorkedTimeToMinutes(workedTime);
+    if (scheduledMinutes === null || scheduledMinutes <= 30) {
+      return res.status(400).json({
+        error: "Las horas trabajadas deben escribirse como HH:MM y ser mayores a 00:30",
+      });
+    }
+
+    const parseLocalDate = (value) => {
+      const [year, month, day] = value.split("-").map(Number);
+      const parsed = new Date(year, month - 1, day, 0, 0, 0, 0);
+      return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+        ? parsed
+        : null;
+    };
+    const start = parseLocalDate(dateFrom);
+    const lastDay = parseLocalDate(dateTo);
+    if (!start || !lastDay) {
+      return res.status(400).json({ error: "Rango de fechas inválido" });
+    }
+    if (start > lastDay) {
+      return res.status(400).json({ error: "La fecha inicial no puede ser posterior a la fecha final" });
+    }
+
+    await ensureScansNameColumns();
+    const end = new Date(lastDay);
+    end.setDate(end.getDate() + 1);
+
+    const result = await pool.query(
+      `
+      SELECT
+        TO_CHAR((s.ts AT TIME ZONE 'America/Bogota')::date, 'YYYY-MM-DD') AS work_date,
+        COALESCE(NULLIF(UPPER(TRIM(s.worker)), ''), 'SIN CÓDIGO') AS worker,
+        COALESCE(
+          NULLIF(MAX(TRIM(s.worker_name)), ''),
+          COALESCE(NULLIF(UPPER(TRIM(s.worker)), ''), 'SIN CÓDIGO')
+        ) AS worker_name,
+        COUNT(*)::integer AS ramos,
+        COALESCE(SUM(s.tallos), 0)::integer AS tallos
+      FROM public.scans s
+      WHERE s.ts >= $1
+        AND s.ts < $2
+      GROUP BY
+        (s.ts AT TIME ZONE 'America/Bogota')::date,
+        COALESCE(NULLIF(UPPER(TRIM(s.worker)), ''), 'SIN CÓDIGO')
+      ORDER BY work_date, worker
+      `,
+      [start, end]
+    );
+
+    const performance = buildWorkerPerformance(result.rows, scheduledMinutes, 30);
+    const totalRamos = performance.reduce((sum, item) => sum + item.ramos, 0);
+    const totalTallos = performance.reduce((sum, item) => sum + item.tallos, 0);
+    const totalScheduledMinutes = performance.reduce((sum, item) => sum + item.scheduledTotalMinutes, 0);
+    const totalLunchMinutes = performance.reduce((sum, item) => sum + item.lunchTotalMinutes, 0);
+    const totalEffectiveMinutes = performance.reduce((sum, item) => sum + item.effectiveTotalMinutes, 0);
+    const totalPerformance = totalEffectiveMinutes > 0
+      ? totalTallos / (totalEffectiveMinutes / 60)
+      : null;
+    const over400Count = performance.filter((item) => item.over400).length;
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Punta de Banda P1";
+    workbook.created = new Date();
+
+    const summary = workbook.addWorksheet("Rendimiento trabajadores", {
+      views: [{ state: "frozen", ySplit: 9 }],
+    });
+    summary.columns = [
+      { key: "worker", width: 16 },
+      { key: "workerName", width: 28 },
+      { key: "activeDays", width: 18 },
+      { key: "ramos", width: 18 },
+      { key: "tallos", width: 19 },
+      { key: "scheduled", width: 24 },
+      { key: "lunch", width: 25 },
+      { key: "effective", width: 22 },
+      { key: "performance", width: 25 },
+      { key: "over400", width: 22 },
+    ];
+    summary.mergeCells("A1:J1");
+    summary.getCell("A1").value = "INFORME DE RENDIMIENTO POR TRABAJADOR";
+    summary.getCell("A1").font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+    summary.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+    summary.getCell("A1").alignment = { horizontal: "center", vertical: "middle" };
+    summary.getRow(1).height = 30;
+    summary.addRow(["Fecha inicial", dateFrom, "Fecha final", dateTo]);
+    summary.addRow(["Jornada diaria ingresada", workedTime, "Almuerzo diario descontado", "00:30"]);
+    summary.addRow(["Horas efectivas por día", formatMinutesAsHHMM(scheduledMinutes - 30)]);
+    summary.addRow(["Trabajadores / parejas", performance.length, "Con más de 400 tallos", over400Count]);
+    summary.addRow(["Total de ramos", totalRamos, "Total de tallos", totalTallos]);
+    summary.addRow(["Cálculo", "Tallos procesados ÷ horas efectivas acumuladas"]);
+    summary.addRow([]);
+
+    const header = summary.addRow([
+      "Bonchador",
+      "Nombre",
+      "Días con registros",
+      "Ramos procesados",
+      "Tallos procesados",
+      "Horas programadas (HH:MM)",
+      "Almuerzo descontado (HH:MM)",
+      "Horas efectivas (HH:MM)",
+      "Rendimiento (tallos/hora)",
+      "Más de 400 tallos",
+    ]);
+    styleReportHeader(header);
+
+    performance.forEach((item, index) => {
+      const row = summary.addRow([
+        item.worker,
+        item.workerName,
+        item.activeDays,
+        item.ramos,
+        item.tallos,
+        formatMinutesAsHHMM(item.scheduledTotalMinutes),
+        formatMinutesAsHHMM(item.lunchTotalMinutes),
+        formatMinutesAsHHMM(item.effectiveTotalMinutes),
+        item.stemsPerHour,
+        item.over400 ? "SÍ" : "NO",
+      ]);
+      row.getCell(9).numFmt = "0.00";
+      if (index % 2 === 0) {
+        row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+      }
+      row.getCell(10).font = {
+        bold: true,
+        color: { argb: item.over400 ? "FF166534" : "FF991B1B" },
+      };
+      row.getCell(10).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: item.over400 ? "FFDCFCE7" : "FFFEE2E2" },
+      };
+    });
+
+    const totalRow = summary.addRow([
+      "TOTAL",
+      "",
+      "",
+      totalRamos,
+      totalTallos,
+      formatMinutesAsHHMM(totalScheduledMinutes),
+      formatMinutesAsHHMM(totalLunchMinutes),
+      formatMinutesAsHHMM(totalEffectiveMinutes),
+      totalPerformance,
+      `${over400Count} pareja(s)`,
+    ]);
+    totalRow.font = { bold: true };
+    totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
+    totalRow.getCell(9).numFmt = "0.00";
+    summary.autoFilter = `A${header.number}:J${header.number}`;
+
+    const detail = workbook.addWorksheet("Detalle diario", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    detail.columns = [
+      { header: "Fecha", key: "date", width: 15 },
+      { header: "Bonchador", key: "worker", width: 16 },
+      { header: "Nombre", key: "name", width: 28 },
+      { header: "Ramos procesados", key: "ramos", width: 19 },
+      { header: "Tallos procesados", key: "tallos", width: 19 },
+      { header: "Jornada ingresada (HH:MM)", key: "scheduled", width: 25 },
+      { header: "Almuerzo descontado (HH:MM)", key: "lunch", width: 28 },
+      { header: "Horas efectivas (HH:MM)", key: "effective", width: 23 },
+      { header: "Rendimiento (tallos/hora)", key: "performance", width: 25 },
+      { header: "Más de 400 tallos en el día", key: "over400", width: 27 },
+    ];
+    styleReportHeader(detail.getRow(1));
+    result.rows.forEach((source, index) => {
+      const tallos = Number(source.tallos || 0);
+      const effectiveMinutes = scheduledMinutes - 30;
+      const row = detail.addRow({
+        date: String(source.work_date || "").slice(0, 10),
+        worker: source.worker,
+        name: source.worker_name,
+        ramos: Number(source.ramos || 0),
+        tallos,
+        scheduled: workedTime,
+        lunch: "00:30",
+        effective: formatMinutesAsHHMM(effectiveMinutes),
+        performance: tallos / (effectiveMinutes / 60),
+        over400: tallos > 400 ? "SÍ" : "NO",
+      });
+      row.getCell(9).numFmt = "0.00";
+      if (index % 2 === 0) {
+        row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+      }
+    });
+    detail.autoFilter = "A1:J1";
+
+    [summary, detail].forEach((sheet) => {
+      sheet.eachRow((row) => {
+        row.alignment = { vertical: "middle" };
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "FFD6E0EF" } },
+            left: { style: "thin", color: { argb: "FFD6E0EF" } },
+            bottom: { style: "thin", color: { argb: "FFD6E0EF" } },
+            right: { style: "thin", color: { argb: "FFD6E0EF" } },
+          };
+        });
+      });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `informe_rendimiento_trabajadores_${dateFrom}_a_${dateTo}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error("POST /api/reports/worker-performance error:", err);
+    return res.status(500).json({ error: "No se pudo generar el informe de rendimiento" });
+  }
+});
+
 app.post("/api/reports/grade-estimate", async (req, res) => {
   try {
     const dateFrom = String(req.body?.dateFrom || "").trim();
@@ -1611,7 +1896,10 @@ if (require.main === module) startServer();
 
 module.exports = {
   app,
+  buildWorkerPerformance,
+  formatMinutesAsHHMM,
   isValidClientRecordId,
+  parseWorkedTimeToMinutes,
   parseClientTimestamp,
   parseGrado,
   parseHistoricalTimestamp,
