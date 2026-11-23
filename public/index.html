@@ -987,7 +987,7 @@
 <div id="gradeReportModal" class="reportModal hidden" role="dialog" aria-modal="true" aria-labelledby="gradeReportTitle">
   <form id="gradeReportForm" class="reportDialog">
     <h3 id="gradeReportTitle">Informe de rendimiento por trabajador</h3>
-    <div class="hint" style="margin-top:6px;">Calcula tallos por hora para cada pareja en el rango seleccionado. Descuenta 00:30 de almuerzo por cada día con registros e incluye la columna “Más de 400 tallos”.</div>
+    <div class="hint" style="margin-top:6px;">Calcula automáticamente el tiempo desde el primer ramo registrado hasta el último de cada pareja y cada día. Descuenta 00:30 de comida e incluye la columna “Más de 400 tallos”.</div>
     <div class="row2">
       <label>Fecha inicial
         <input id="gradeReportDateFrom" type="date" required />
@@ -996,8 +996,6 @@
         <input id="gradeReportDateTo" type="date" required />
       </label>
     </div>
-    <label>Horas trabajadas por día (HH:MM)</label>
-    <input id="gradeReportWorkedTime" type="time" value="08:00" min="00:31" max="23:59" required />
     <label>Contraseña</label>
     <input id="gradeReportPassword" type="password" autocomplete="current-password" required />
     <div id="gradeReportStatus" class="hint reportDialogStatus" aria-live="polite"></div>
@@ -1029,7 +1027,6 @@
   const gradeReportForm = $("gradeReportForm");
   const gradeReportDateFrom = $("gradeReportDateFrom");
   const gradeReportDateTo = $("gradeReportDateTo");
-  const gradeReportWorkedTime = $("gradeReportWorkedTime");
   const gradeReportPassword = $("gradeReportPassword");
   const gradeReportStatus = $("gradeReportStatus");
   const btnGenerateGradeReport = $("btnGenerateGradeReport");
@@ -3336,12 +3333,11 @@ function closeGradeReportModal() {
 async function generateGradeEstimateExcel() {
   const dateFrom = String(gradeReportDateFrom?.value || "").trim();
   const dateTo = String(gradeReportDateTo?.value || "").trim();
-  const workedTime = String(gradeReportWorkedTime?.value || "").trim();
   const password = String(gradeReportPassword?.value || "");
 
-  if (!dateFrom || !dateTo || !workedTime || !password) {
+  if (!dateFrom || !dateTo || !password) {
     gradeReportStatus.style.color = "#fda4af";
-    gradeReportStatus.textContent = "Seleccione el rango, escriba las horas trabajadas e ingrese la contraseña.";
+    gradeReportStatus.textContent = "Seleccione el rango de fechas e ingrese la contraseña.";
     return;
   }
 
@@ -3359,7 +3355,7 @@ async function generateGradeEstimateExcel() {
     const res = await fetch(API + "/api/reports/worker-performance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dateFrom, dateTo, workedTime, password })
+      body: JSON.stringify({ dateFrom, dateTo, password })
     });
 
     if (!res.ok) {
