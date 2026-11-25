@@ -5,8 +5,11 @@ const test = require("node:test");
 
 const {
   buildWorkerPerformance,
+  calculateStemsPerHour,
+  clockTimeToExcelValue,
   formatMinutesAsHHMM,
   isValidClientRecordId,
+  minutesToExcelDuration,
   parseClientTimestamp,
   parseGrado,
   parseHistoricalTimestamp,
@@ -93,6 +96,20 @@ test("la captura principal usa código completo y no conserva el flujo manual po
 test("presenta los minutos calculados en formato HH:MM", () => {
   assert.equal(formatMinutesAsHHMM(450), "07:30");
   assert.equal(formatMinutesAsHHMM(960), "16:00");
+});
+
+test("guarda horas y duraciones como valores numéricos reconocidos por Excel", () => {
+  assert.equal(minutesToExcelDuration(450), 7.5 / 24);
+  assert.equal(minutesToExcelDuration(26 * 60), 26 / 24);
+  assert.equal(clockTimeToExcelValue("07:30:00"), 7.5 / 24);
+  assert.equal(clockTimeToExcelValue("25:00:00"), null);
+});
+
+test("el promedio general pondera los tallos por las horas efectivas totales", () => {
+  const totalMinutes = 396 * 60 + 14;
+  const result = calculateStemsPerHour(159146, totalMinutes);
+  assert.ok(Math.abs(result - 401.65) < 0.01);
+  assert.equal(calculateStemsPerHour(100, 0), null);
 });
 
 test("calcula rendimiento desde el primer ramo hasta el último y descuenta comida por día", () => {

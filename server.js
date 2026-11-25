@@ -1060,6 +1060,25 @@ function formatMinutesAsHHMM(value) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+function minutesToExcelDuration(value) {
+  return Math.max(0, Number(value) || 0) / (24 * 60);
+}
+
+function clockTimeToExcelValue(value) {
+  const match = /^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/.exec(String(value || "").trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  if (hours > 23) return null;
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] || 0);
+  return (hours * 3600 + minutes * 60 + seconds) / (24 * 60 * 60);
+}
+
+function calculateStemsPerHour(stems, effectiveMinutes) {
+  const safeMinutes = Math.max(0, Number(effectiveMinutes) || 0);
+  return safeMinutes > 0 ? Number(stems || 0) / (safeMinutes / 60) : null;
+}
+
 function buildWorkerPerformance(rows, lunchMinutes = 30) {
   const byWorker = new Map();
 
@@ -1089,9 +1108,7 @@ function buildWorkerPerformance(rows, lunchMinutes = 30) {
   return [...byWorker.values()]
     .map((item) => ({
       ...item,
-      stemsPerHour: item.effectiveTotalMinutes > 0
-        ? item.tallos / (item.effectiveTotalMinutes / 60)
-        : null,
+      stemsPerHour: calculateStemsPerHour(item.tallos, item.effectiveTotalMinutes),
       over400: item.tallos > 400,
     }))
     .sort((a, b) => a.worker.localeCompare(b.worker, "es", { numeric: true }));
@@ -1162,20 +1179,20 @@ app.post("/api/reports/worker-performance", async (req, res) => {
     const totalRecordedMinutes = performance.reduce((sum, item) => sum + item.recordedTotalMinutes, 0);
     const totalLunchMinutes = performance.reduce((sum, item) => sum + item.lunchTotalMinutes, 0);
     const totalEffectiveMinutes = performance.reduce((sum, item) => sum + item.effectiveTotalMinutes, 0);
-    const totalPerformance = totalEffectiveMinutes > 0
-      ? totalTallos / (totalEffectiveMinutes / 60)
-      : null;
+    const totalPerformance = calculateStemsPerHour(totalTallos, totalEffectiveMinutes);
     const over400Count = performance.filter((item) => item.over400).length;
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Punta de Banda P1";
     workbook.created = new Date();
+    workbook.calcProperties.fullCalcOnLoad = true;
+    workbook.calcProperties.forceFullCalc = true;
 
     const summary = workbook.addWorksheet("Rendimiento trabajadores", {
       views: [{ state: "frozen", ySplit: 9 }],
     });
     summary.columns = [
-      { key: "worker", width: 16 },
+      { key: "worker", width: 27 },
       { key: "workerName", width: 28 },
       { key: "activeDays", width: 18 },
       { key: "ramos", width: 18 },
@@ -1193,11 +1210,17 @@ app.post("/api/reports/worker-performance", async (req, res) => {
     summary.getCell("A1").alignment = { horizontal: "center", vertical: "middle" };
     summary.getRow(1).height = 30;
     summary.addRow(["Fecha inicial", dateFrom, "Fecha final", dateTo]);
-    summary.addRow(["Cálculo de horas", "Primer ramo registrado hasta el último", "Almuerzo diario descontado", "00:30"]);
+    const calculationRow = summary.addRow([
+      "Cálculo de horas",
+      "Primer ramo registrado hasta el último",
+      "Almuerzo diario descontado",
+      minutesToExcelDuration(30),
+    ]);
+    calculationRow.getCell(4).numFmt = "[h]:mm";
     summary.addRow(["Importante", "El cálculo se realiza por pareja y por cada día con registros"]);
     summary.addRow(["Trabajadores / parejas", performance.length, "Con más de 400 tallos", over400Count]);
     summary.addRow(["Total de ramos", totalRamos, "Total de tallos", totalTallos]);
-    summary.addRow(["Cálculo", "Tallos procesados ÷ horas efectivas acumuladas"]);
+    summary.addRow(["Promedio general", "Tallos totales ÷ horas efectivas totales (promedio ponderado)"]);
     summary.addRow([]);
 
     const header = summary.addRow([
@@ -1221,12 +1244,19 @@ app.post("/api/reports/worker-performance", async (req, res) => {
         item.activeDays,
         item.ramos,
         item.tallos,
-        formatMinutesAsHHMM(item.recordedTotalMinutes),
-        formatMinutesAsHHMM(item.lunchTotalMinutes),
-        formatMinutesAsHHMM(item.effectiveTotalMinutes),
-        item.stemsPerHour,
+        minutesToExcelDuration(item.recordedTotalMinutes),
+        minutesToExcelDuration(item.lunchTotalMinutes),
+        minutesToExcelDuration(item.effectiveTotalMinutes),
+        null,
         item.over400 ? "SÍ" : "NO",
       ]);
+      for (let column = 6; column <= 8; column += 1) row.getCell(column).numFmt = "[h]:mm";
+      if (item.stemsPerHour !== null) {
+        row.getCell(9).value = {
+          formula: `E${row.number}/(H${row.number}*24)`,
+          result: item.stemsPerHour,
+        };
+      }
       row.getCell(9).numFmt = "0.00";
       if (index % 2 === 0) {
         row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
@@ -1243,17 +1273,24 @@ app.post("/api/reports/worker-performance", async (req, res) => {
     });
 
     const totalRow = summary.addRow([
-      "TOTAL",
+      "TOTAL / PROMEDIO GENERAL",
       "",
       "",
       totalRamos,
       totalTallos,
-      formatMinutesAsHHMM(totalRecordedMinutes),
-      formatMinutesAsHHMM(totalLunchMinutes),
-      formatMinutesAsHHMM(totalEffectiveMinutes),
-      totalPerformance,
+      minutesToExcelDuration(totalRecordedMinutes),
+      minutesToExcelDuration(totalLunchMinutes),
+      minutesToExcelDuration(totalEffectiveMinutes),
+      null,
       `${over400Count} pareja(s)`,
     ]);
+    for (let column = 6; column <= 8; column += 1) totalRow.getCell(column).numFmt = "[h]:mm";
+    if (totalPerformance !== null) {
+      totalRow.getCell(9).value = {
+        formula: `E${totalRow.number}/(H${totalRow.number}*24)`,
+        result: totalPerformance,
+      };
+    }
     totalRow.font = { bold: true };
     totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
     totalRow.getCell(9).numFmt = "0.00";
@@ -1285,16 +1322,26 @@ app.post("/api/reports/worker-performance", async (req, res) => {
         date: String(source.work_date || "").slice(0, 10),
         worker: source.worker,
         name: source.worker_name,
-        first: source.first_scan_time,
-        last: source.last_scan_time,
+        first: clockTimeToExcelValue(source.first_scan_time),
+        last: clockTimeToExcelValue(source.last_scan_time),
         ramos: Number(source.ramos || 0),
         tallos,
-        recorded: formatMinutesAsHHMM(recordedMinutes),
-        lunch: "00:30",
-        effective: formatMinutesAsHHMM(effectiveMinutes),
-        performance: effectiveMinutes > 0 ? tallos / (effectiveMinutes / 60) : null,
+        recorded: minutesToExcelDuration(recordedMinutes),
+        lunch: minutesToExcelDuration(30),
+        effective: minutesToExcelDuration(effectiveMinutes),
+        performance: null,
         over400: tallos > 400 ? "SÍ" : "NO",
       });
+      row.getCell(4).numFmt = "hh:mm:ss";
+      row.getCell(5).numFmt = "hh:mm:ss";
+      for (let column = 8; column <= 10; column += 1) row.getCell(column).numFmt = "[h]:mm";
+      const dailyPerformance = calculateStemsPerHour(tallos, effectiveMinutes);
+      if (dailyPerformance !== null) {
+        row.getCell(11).value = {
+          formula: `G${row.number}/(J${row.number}*24)`,
+          result: dailyPerformance,
+        };
+      }
       row.getCell(11).numFmt = "0.00";
       if (index % 2 === 0) {
         row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
@@ -1886,8 +1933,11 @@ if (require.main === module) startServer();
 module.exports = {
   app,
   buildWorkerPerformance,
+  calculateStemsPerHour,
+  clockTimeToExcelValue,
   formatMinutesAsHHMM,
   isValidClientRecordId,
+  minutesToExcelDuration,
   parseClientTimestamp,
   parseGrado,
   parseHistoricalTimestamp,
