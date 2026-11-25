@@ -1145,13 +1145,20 @@ app.post("/api/reports/worker-performance", async (req, res) => {
     }
 
     await ensureScansNameColumns();
-    const end = new Date(lastDay);
-    end.setDate(end.getDate() + 1);
-
     const result = await pool.query(
       `
+      WITH localized_scans AS (
+        SELECT
+          s.*,
+          CASE
+            WHEN pg_typeof(s.ts)::text = 'timestamp without time zone'
+              THEN ((s.ts AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')::timestamp without time zone
+            ELSE (s.ts AT TIME ZONE 'America/Bogota')::timestamp without time zone
+          END AS local_ts
+        FROM public.scans s
+      )
       SELECT
-        TO_CHAR((s.ts AT TIME ZONE 'America/Bogota')::date, 'YYYY-MM-DD') AS work_date,
+        TO_CHAR(s.local_ts::date, 'YYYY-MM-DD') AS work_date,
         COALESCE(NULLIF(UPPER(TRIM(s.worker)), ''), 'SIN CÓDIGO') AS worker,
         COALESCE(
           NULLIF(MAX(TRIM(s.worker_name)), ''),
@@ -1159,18 +1166,18 @@ app.post("/api/reports/worker-performance", async (req, res) => {
         ) AS worker_name,
         COUNT(*)::integer AS ramos,
         COALESCE(SUM(s.tallos), 0)::integer AS tallos,
-        TO_CHAR(MIN(s.ts AT TIME ZONE 'America/Bogota'), 'HH24:MI:SS') AS first_scan_time,
-        TO_CHAR(MAX(s.ts AT TIME ZONE 'America/Bogota'), 'HH24:MI:SS') AS last_scan_time,
-        FLOOR(EXTRACT(EPOCH FROM (MAX(s.ts) - MIN(s.ts))) / 60)::integer AS raw_minutes
-      FROM public.scans s
-      WHERE s.ts >= $1
-        AND s.ts < $2
+        TO_CHAR(MIN(s.local_ts), 'HH24:MI:SS') AS first_scan_time,
+        TO_CHAR(MAX(s.local_ts), 'HH24:MI:SS') AS last_scan_time,
+        FLOOR(EXTRACT(EPOCH FROM (MAX(s.local_ts) - MIN(s.local_ts))) / 60)::integer AS raw_minutes
+      FROM localized_scans s
+      WHERE s.local_ts::date >= $1::date
+        AND s.local_ts::date <= $2::date
       GROUP BY
-        (s.ts AT TIME ZONE 'America/Bogota')::date,
+        s.local_ts::date,
         COALESCE(NULLIF(UPPER(TRIM(s.worker)), ''), 'SIN CÓDIGO')
       ORDER BY work_date, worker
       `,
-      [start, end]
+      [dateFrom, dateTo]
     );
 
     const performance = buildWorkerPerformance(result.rows, 30);

@@ -114,6 +114,14 @@ test("el Excel muestra el primer y último ramo en formato de 12 horas", () => {
   assert.match(source, /getCell\(5\)\.numFmt = "h:mm AM\/PM"/);
 });
 
+test("el informe convierte a hora local los registros UTC guardados sin zona horaria", () => {
+  const serverPath = path.join(__dirname, "..", "server.js");
+  const source = fs.readFileSync(serverPath, "utf8");
+  assert.match(source, /pg_typeof\(s\.ts\)::text = 'timestamp without time zone'/);
+  assert.match(source, /s\.ts AT TIME ZONE 'UTC'/);
+  assert.match(source, /s\.ts AT TIME ZONE 'America\/Bogota'/);
+});
+
 test("el promedio general pondera los tallos por las horas efectivas totales", () => {
   const totalMinutes = 396 * 60 + 14;
   const result = calculateStemsPerHour(159146, totalMinutes);
