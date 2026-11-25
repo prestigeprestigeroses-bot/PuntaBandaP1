@@ -1197,9 +1197,9 @@ app.post("/api/reports/worker-performance", async (req, res) => {
       { key: "activeDays", width: 18 },
       { key: "ramos", width: 18 },
       { key: "tallos", width: 19 },
-      { key: "recorded", width: 24 },
-      { key: "lunch", width: 25 },
-      { key: "effective", width: 22 },
+      { key: "recorded", width: 44 },
+      { key: "lunch", width: 29 },
+      { key: "effective", width: 36 },
       { key: "performance", width: 25 },
       { key: "over400", width: 22 },
     ];
@@ -1217,7 +1217,10 @@ app.post("/api/reports/worker-performance", async (req, res) => {
       minutesToExcelDuration(30),
     ]);
     calculationRow.getCell(4).numFmt = "[h]:mm";
-    summary.addRow(["Importante", "El cálculo se realiza por pareja y por cada día con registros"]);
+    summary.addRow([
+      "Horario diario",
+      "El cálculo se realiza por pareja y día; consulte primer y último ramo en Detalle diario (AM/PM)",
+    ]);
     summary.addRow(["Trabajadores / parejas", performance.length, "Con más de 400 tallos", over400Count]);
     summary.addRow(["Total de ramos", totalRamos, "Total de tallos", totalTallos]);
     summary.addRow(["Promedio general", "Tallos totales ÷ horas efectivas totales (promedio ponderado)"]);
@@ -1229,9 +1232,9 @@ app.post("/api/reports/worker-performance", async (req, res) => {
       "Días con registros",
       "Ramos procesados",
       "Tallos procesados",
-      "Tiempo registrado (HH:MM)",
-      "Almuerzo descontado (HH:MM)",
-      "Horas efectivas (HH:MM)",
+      "Tiempo acumulado entre primer y último ramo ([h]:mm)",
+      "Almuerzo acumulado ([h]:mm)",
+      "Horas efectivas acumuladas ([h]:mm)",
       "Rendimiento (tallos/hora)",
       "Más de 400 tallos",
     ]);
@@ -1303,13 +1306,13 @@ app.post("/api/reports/worker-performance", async (req, res) => {
       { header: "Fecha", key: "date", width: 15 },
       { header: "Bonchador", key: "worker", width: 16 },
       { header: "Nombre", key: "name", width: 28 },
-      { header: "Primer ramo registrado", key: "first", width: 22 },
-      { header: "Último ramo registrado", key: "last", width: 22 },
+      { header: "Primer ramo (formato 12 horas)", key: "first", width: 28 },
+      { header: "Último ramo (formato 12 horas)", key: "last", width: 28 },
       { header: "Ramos procesados", key: "ramos", width: 19 },
       { header: "Tallos procesados", key: "tallos", width: 19 },
-      { header: "Tiempo registrado (HH:MM)", key: "recorded", width: 25 },
-      { header: "Almuerzo descontado (HH:MM)", key: "lunch", width: 28 },
-      { header: "Horas efectivas (HH:MM)", key: "effective", width: 23 },
+      { header: "Tiempo acumulado ([h]:mm)", key: "recorded", width: 27 },
+      { header: "Almuerzo descontado ([h]:mm)", key: "lunch", width: 30 },
+      { header: "Horas efectivas ([h]:mm)", key: "effective", width: 25 },
       { header: "Rendimiento (tallos/hora)", key: "performance", width: 25 },
       { header: "Más de 400 tallos en el día", key: "over400", width: 27 },
     ];
@@ -1332,8 +1335,8 @@ app.post("/api/reports/worker-performance", async (req, res) => {
         performance: null,
         over400: tallos > 400 ? "SÍ" : "NO",
       });
-      row.getCell(4).numFmt = "hh:mm:ss";
-      row.getCell(5).numFmt = "hh:mm:ss";
+      row.getCell(4).numFmt = "h:mm AM/PM";
+      row.getCell(5).numFmt = "h:mm AM/PM";
       for (let column = 8; column <= 10; column += 1) row.getCell(column).numFmt = "[h]:mm";
       const dailyPerformance = calculateStemsPerHour(tallos, effectiveMinutes);
       if (dailyPerformance !== null) {

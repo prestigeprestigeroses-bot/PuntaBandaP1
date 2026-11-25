@@ -105,6 +105,15 @@ test("guarda horas y duraciones como valores numéricos reconocidos por Excel", 
   assert.equal(clockTimeToExcelValue("25:00:00"), null);
 });
 
+test("el Excel muestra el primer y último ramo en formato de 12 horas", () => {
+  const serverPath = path.join(__dirname, "..", "server.js");
+  const source = fs.readFileSync(serverPath, "utf8");
+  assert.match(source, /Primer ramo \(formato 12 horas\)/);
+  assert.match(source, /Último ramo \(formato 12 horas\)/);
+  assert.match(source, /getCell\(4\)\.numFmt = "h:mm AM\/PM"/);
+  assert.match(source, /getCell\(5\)\.numFmt = "h:mm AM\/PM"/);
+});
+
 test("el promedio general pondera los tallos por las horas efectivas totales", () => {
   const totalMinutes = 396 * 60 + 14;
   const result = calculateStemsPerHour(159146, totalMinutes);
