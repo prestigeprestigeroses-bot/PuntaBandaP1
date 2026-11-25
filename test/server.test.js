@@ -114,11 +114,12 @@ test("el Excel muestra el primer y último ramo en formato de 12 horas", () => {
   assert.match(source, /getCell\(5\)\.numFmt = "h:mm AM\/PM"/);
 });
 
-test("el informe convierte a hora local los registros UTC guardados sin zona horaria", () => {
+test("el informe conserva la misma hora local que muestra el sistema", () => {
   const serverPath = path.join(__dirname, "..", "server.js");
   const source = fs.readFileSync(serverPath, "utf8");
   assert.match(source, /pg_typeof\(s\.ts\)::text = 'timestamp without time zone'/);
-  assert.match(source, /s\.ts AT TIME ZONE 'UTC'/);
+  assert.match(source, /THEN s\.ts::timestamp without time zone/);
+  assert.doesNotMatch(source, /s\.ts AT TIME ZONE 'UTC'/);
   assert.match(source, /s\.ts AT TIME ZONE 'America\/Bogota'/);
 });
 

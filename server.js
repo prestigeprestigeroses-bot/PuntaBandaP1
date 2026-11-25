@@ -1152,7 +1152,7 @@ app.post("/api/reports/worker-performance", async (req, res) => {
           s.*,
           CASE
             WHEN pg_typeof(s.ts)::text = 'timestamp without time zone'
-              THEN ((s.ts AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')::timestamp without time zone
+              THEN s.ts::timestamp without time zone
             ELSE (s.ts AT TIME ZONE 'America/Bogota')::timestamp without time zone
           END AS local_ts
         FROM public.scans s
