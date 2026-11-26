@@ -7,6 +7,7 @@ const {
   buildWorkerPerformance,
   calculateStemsPerHour,
   clockTimeToExcelValue,
+  formatLocalTimestampForDatabase,
   formatMinutesAsHHMM,
   isValidClientRecordId,
   minutesToExcelDuration,
@@ -50,6 +51,17 @@ test("las fechas históricas inválidas no se normalizan silenciosamente", () =>
   assert.ok(parseHistoricalTimestamp("2026-10-30", "14:25:10") instanceof Date);
   assert.equal(parseHistoricalTimestamp("2026-02-30", "14:25:10"), null);
   assert.equal(parseHistoricalTimestamp("2026-10-30", "25:00:00"), null);
+});
+
+test("el ingreso histórico conserva literalmente la fecha y hora local seleccionadas", () => {
+  const timestamp = parseHistoricalTimestamp("2026-11-25", "21:07:58");
+  assert.equal(formatLocalTimestampForDatabase(timestamp), "2026-11-25 21:07:58.000");
+
+  const serverPath = path.join(__dirname, "..", "server.js");
+  const source = fs.readFileSync(serverPath, "utf8");
+  assert.match(source, /\$1::timestamp without time zone/);
+  assert.match(source, /AT TIME ZONE 'America\/Bogota'/);
+  assert.doesNotMatch(source, /\$1::timestamptz \+ \(serie\.numero/);
 });
 
 test("conserva la fecha original de un escaneo offline", () => {

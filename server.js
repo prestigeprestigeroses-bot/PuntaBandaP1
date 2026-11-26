@@ -61,6 +61,7 @@ let workerNameMap = {};
 let scansNameColumnsReady = false;
 let workerNamesTableReady = false;
 let dataProtectionSchemaPromise = null;
+let scansTimestampTypePromise = null;
 
 // Conjunto de clientes SSE conectados
 const clients = new Set();
@@ -682,6 +683,13 @@ async function saveHistoricalScansBatch(
 ) {
   await ensureScansNameColumns();
 
+  const timestampType = await getScansTimestampType();
+  const localTimestampText = formatLocalTimestampForDatabase(timestamp);
+  if (!localTimestampText) throw new Error("Fecha u hora histórica inválida");
+  const timestampSql = timestampType === "timestamp with time zone"
+    ? "($1::timestamp without time zone AT TIME ZONE 'America/Bogota')"
+    : "$1::timestamp without time zone";
+
   const result = await pool.query(
     `
     INSERT INTO scans (
@@ -699,7 +707,7 @@ async function saveHistoricalScansBatch(
       finca
     )
     SELECT
-      $1::timestamptz + (serie.numero * INTERVAL '1 millisecond'),
+      ${timestampSql} + (serie.numero * INTERVAL '1 millisecond'),
       $2,
       $3,
       $4,
@@ -715,7 +723,7 @@ async function saveHistoricalScansBatch(
     RETURNING *
     `,
     [
-      timestamp,
+      localTimestampText,
       wObj.code,
       workerName,
       wObj.tallos,
@@ -732,6 +740,38 @@ async function saveHistoricalScansBatch(
   );
 
   return result.rows;
+}
+
+async function getScansTimestampType() {
+  if (!scansTimestampTypePromise) {
+    scansTimestampTypePromise = pool.query(
+      `
+      SELECT data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'scans'
+        AND column_name = 'ts'
+      LIMIT 1
+      `
+    ).then((result) => {
+      const type = String(result.rows[0]?.data_type || "").trim().toLowerCase();
+      if (type !== "timestamp without time zone" && type !== "timestamp with time zone") {
+        throw new Error("No se pudo identificar el tipo de fecha de scans.ts");
+      }
+      return type;
+    }).catch((error) => {
+      scansTimestampTypePromise = null;
+      throw error;
+    });
+  }
+  return scansTimestampTypePromise;
+}
+
+function formatLocalTimestampForDatabase(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return null;
+  const pad = (number, length = 2) => String(number).padStart(length, "0");
+  return `${pad(value.getFullYear(), 4)}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+    + ` ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${pad(value.getMilliseconds(), 3)}`;
 }
 
 function parseHistoricalTimestamp(dateValue, timeValue) {
@@ -1946,6 +1986,7 @@ module.exports = {
   calculateStemsPerHour,
   clockTimeToExcelValue,
   formatMinutesAsHHMM,
+  formatLocalTimestampForDatabase,
   isValidClientRecordId,
   minutesToExcelDuration,
   parseClientTimestamp,
