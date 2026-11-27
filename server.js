@@ -46,6 +46,11 @@ const pool = new Pool({
 const WORKER_MIN = 1;
 const WORKER_MAX = 20;
 const REPORT_PASSWORD = process.env.REPORT_PASSWORD || "P1-INFORME-2026";
+const APP_ACCESS_PASSWORD = process.env.APP_ACCESS_PASSWORD || REPORT_PASSWORD;
+const SESSION_COOKIE_NAME = "punta_banda_session";
+const SESSION_DURATION_MS = 16 * 60 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 10;
 // Pesos base: se varían por variedad/finca y luego se normalizan hasta completar 100%.
 const GRADE_ESTIMATE_PERCENTAGES = [
   { grado: 40, porcentaje: 15 },
@@ -66,8 +71,144 @@ let scansTimestampTypePromise = null;
 // Conjunto de clientes SSE conectados
 const clients = new Set();
 
-// Servir estáticos
-app.use(express.static(path.join(__dirname, "public")));
+const loginFailures = new Map();
+
+function parseCookies(cookieHeader = "") {
+  const cookies = {};
+  for (const part of String(cookieHeader || "").split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 1) continue;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (!key) continue;
+    try {
+      cookies[key] = decodeURIComponent(value);
+    } catch {
+      cookies[key] = value;
+    }
+  }
+  return cookies;
+}
+
+function sessionSecret() {
+  const configuredSecret = String(process.env.APP_SESSION_SECRET || "").trim();
+  const source = configuredSecret || `${APP_ACCESS_PASSWORD}|punta-banda-p1-session-v1`;
+  return crypto.createHash("sha256").update(source, "utf8").digest();
+}
+
+function signSessionValue(value) {
+  return crypto.createHmac("sha256", sessionSecret()).update(String(value), "utf8").digest("base64url");
+}
+
+function createSessionToken(now = Date.now()) {
+  const expiresAt = Number(now) + SESSION_DURATION_MS;
+  const value = `v1.${expiresAt}`;
+  return `${value}.${signSessionValue(value)}`;
+}
+
+function verifySessionToken(token, now = Date.now()) {
+  const match = /^v1\.(\d+)\.([A-Za-z0-9_-]+)$/.exec(String(token || ""));
+  if (!match) return false;
+
+  const expiresAt = Number(match[1]);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= Number(now)) return false;
+
+  const value = `v1.${match[1]}`;
+  return secureTextEquals(match[2], signSessionValue(value));
+}
+
+function requestHasValidSession(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  return verifySessionToken(cookies[SESSION_COOKIE_NAME]);
+}
+
+function cookieSecuritySuffix(req) {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  return req.secure || forwardedProto === "https" || process.env.NODE_ENV === "production"
+    ? "; Secure"
+    : "";
+}
+
+function setSessionCookie(req, res) {
+  const maxAgeSeconds = Math.floor(SESSION_DURATION_MS / 1000);
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(createSessionToken())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${cookieSecuritySuffix(req)}`
+  );
+}
+
+function clearSessionCookie(req, res) {
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${cookieSecuritySuffix(req)}`
+  );
+}
+
+function loginClientKey(req) {
+  return String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "desconocido")
+    .split(",")[0]
+    .trim();
+}
+
+function getLoginFailureState(key, now = Date.now()) {
+  const current = loginFailures.get(key);
+  if (!current || current.resetAt <= now) {
+    const fresh = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    loginFailures.set(key, fresh);
+    return fresh;
+  }
+  return current;
+}
+
+app.get("/login", (req, res) => {
+  if (requestHasValidSession(req)) return res.redirect(302, "/");
+  res.setHeader("Cache-Control", "no-store");
+  return res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+app.get("/api/auth/status", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.json({ authenticated: requestHasValidSession(req) });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const key = loginClientKey(req);
+  const state = getLoginFailureState(key);
+
+  if (state.count >= LOGIN_MAX_FAILURES) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((state.resetAt - Date.now()) / 1000));
+    res.setHeader("Retry-After", String(retryAfterSeconds));
+    return res.status(429).json({ error: "Demasiados intentos. Espere unos minutos y vuelva a intentar." });
+  }
+
+  if (!secureTextEquals(req.body?.password, APP_ACCESS_PASSWORD)) {
+    state.count += 1;
+    return res.status(401).json({ error: "Contraseña incorrecta" });
+  }
+
+  loginFailures.delete(key);
+  setSessionCookie(req, res);
+  return res.json({ ok: true });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  clearSessionCookie(req, res);
+  return res.json({ ok: true });
+});
+
+app.use((req, res, next) => {
+  if (requestHasValidSession(req)) return next();
+
+  res.setHeader("Cache-Control", "no-store");
+  if (req.path.startsWith("/api/")) {
+    return res.status(401).json({ error: "Sesión vencida. Ingrese nuevamente." });
+  }
+  return res.redirect(302, "/login");
+});
+
+// Servir la aplicación solo después de validar la sesión.
+app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -2053,10 +2194,12 @@ module.exports = {
   buildWorkerPerformance,
   calculateStemsPerHour,
   clockTimeToExcelValue,
+  createSessionToken,
   formatMinutesAsHHMM,
   formatLocalTimestampForDatabase,
   isValidClientRecordId,
   minutesToExcelDuration,
+  parseCookies,
   parseClientTimestamp,
   parseGrado,
   parseHistoricalTimestamp,
@@ -2064,4 +2207,5 @@ module.exports = {
   parseVariedad,
   parseWorker,
   startServer,
+  verifySessionToken,
 };

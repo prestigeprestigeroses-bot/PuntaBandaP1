@@ -7,15 +7,53 @@ const {
   buildWorkerPerformance,
   calculateStemsPerHour,
   clockTimeToExcelValue,
+  createSessionToken,
   formatLocalTimestampForDatabase,
   formatMinutesAsHHMM,
   isValidClientRecordId,
   minutesToExcelDuration,
+  parseCookies,
   parseClientTimestamp,
   parseGrado,
   parseHistoricalTimestamp,
   parseWorker,
+  verifySessionToken,
 } = require("../server");
+
+test("crea sesiones firmadas, rechaza alteraciones y respeta el vencimiento", () => {
+  const createdAt = Date.UTC(2026, 10, 27, 8, 0, 0);
+  const token = createSessionToken(createdAt);
+
+  assert.equal(verifySessionToken(token, createdAt), true);
+  assert.equal(verifySessionToken(`${token}alterado`, createdAt), false);
+  assert.equal(verifySessionToken(token, createdAt + 16 * 60 * 60 * 1000), false);
+});
+
+test("lee la sesión desde una cabecera de cookies sin exponer la contraseña", () => {
+  assert.deepEqual(parseCookies("tema=oscuro; punta_banda_session=abc.def"), {
+    tema: "oscuro",
+    punta_banda_session: "abc.def",
+  });
+
+  const serverPath = path.join(__dirname, "..", "server.js");
+  const source = fs.readFileSync(serverPath, "utf8");
+  assert.match(source, /HttpOnly; SameSite=Lax/);
+  assert.match(source, /APP_ACCESS_PASSWORD/);
+  assert.match(source, /app\.post\("\/api\/auth\/logout"/);
+});
+
+test("muestra acceso por contraseña y botón para cerrar sesión", () => {
+  const loginPath = path.join(__dirname, "..", "public", "login.html");
+  const htmlPath = path.join(__dirname, "..", "public", "index.html");
+  const login = fs.readFileSync(loginPath, "utf8");
+  const html = fs.readFileSync(htmlPath, "utf8");
+
+  assert.match(login, /type="password"/);
+  assert.match(login, /\/api\/auth\/login/);
+  assert.doesNotMatch(login, /type="text"[^>]*name="user/i);
+  assert.match(html, /id="btnLogout"/);
+  assert.match(html, /\/api\/auth\/logout/);
+});
 
 test("acepta identificadores UUID estables y rechaza valores manipulados", () => {
   assert.equal(isValidClientRecordId("f15987d9-50c8-42bf-9a5e-5b52c7f5cc67"), true);

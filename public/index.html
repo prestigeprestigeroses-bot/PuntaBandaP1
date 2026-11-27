@@ -15,6 +15,7 @@
     .top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .title{font-weight:900;font-size:18px}
     .status{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}
+    .logoutButton{width:auto;padding:6px 10px;font-size:11px;border-color:rgba(251,113,133,.55);color:#fecdd3;white-space:nowrap}
     .dot{width:10px;height:10px;border-radius:50%;background:var(--warn)}
     .dot.ok{background:var(--ok)}
     .dot.bad{background:var(--bad)}
@@ -653,6 +654,7 @@
       <span id="dot" class="dot"></span>
       <span id="st">Conectando…</span>
       <span id="mode" class="hint"></span>
+      <button id="btnLogout" class="ghost logoutButton" type="button">Cerrar sesión</button>
     </div>
   </div>
 
@@ -1022,6 +1024,7 @@
   const scanInput = $("scanInput");
   const lastScanEl = $("lastScan");
   const btnRefresh = $("btnRefresh");
+  const btnLogout = $("btnLogout");
   const btnOpenGradeReport = $("btnOpenGradeReport");
   const gradeReportModal = $("gradeReportModal");
   const gradeReportForm = $("gradeReportForm");
@@ -1040,6 +1043,12 @@
 
 const tbLamina = $("tbLamina");
 const tbVariedad = $("tbVariedad");
+
+function redirectToLoginIfUnauthorized(response) {
+  if (response?.status !== 401) return false;
+  window.location.replace("/login");
+  return true;
+}
 
   const chart = $("chart");
   const chartTip = $("chartTip");
@@ -2757,6 +2766,8 @@ async function loadVariedadesCatalog() {
       fetch(scansUrl, {cache:"no-store"}).catch(()=>null)
     ]);
 
+    if (redirectToLoginIfUnauthorized(pRes) || redirectToLoginIfUnauthorized(sRes)) return;
+
     if (history) pendingAll = {};
     else if (pRes && pRes.ok) pendingAll = await pRes.json();
 
@@ -2989,6 +3000,10 @@ async function loadLaminaName(lObj) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
+    if (redirectToLoginIfUnauthorized(res)) {
+      return { ok: false, offline: false, data: { error: "Sesión vencida" } };
+    }
 
     let data = null;
     try { 
@@ -3510,6 +3525,8 @@ async function performOfflineSync() {
         body: JSON.stringify(item.payload)
       });
 
+      if (redirectToLoginIfUnauthorized(res)) return;
+
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.ok) {
@@ -3657,6 +3674,14 @@ document.addEventListener("keydown", async (e) => {
   btnRefresh.addEventListener("click", async () => {
     await refreshAll({ replace: true });
     lastScanEl.textContent = "Datos actualizados desde la base de datos";
+  });
+  btnLogout?.addEventListener("click", async () => {
+    btnLogout.disabled = true;
+    btnLogout.textContent = "Cerrando…";
+    try {
+      await fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
+    } catch {}
+    window.location.replace("/login");
   });
   btnOpenGradeReport?.addEventListener("click", openGradeReportModal);
   btnCloseGradeReport?.addEventListener("click", closeGradeReportModal);
@@ -4093,6 +4118,14 @@ async function handleLocalDateRollover() {
     renderAll();
     installResizeObservers();
     setInterval(handleLocalDateRollover, 30000);
+
+    setInterval(async () => {
+      if (!navigator.onLine) return;
+      const response = await fetch(API + "/api/auth/status", { cache: "no-store" }).catch(() => null);
+      if (!response) return;
+      const data = await response.json().catch(() => ({}));
+      if (!data.authenticated) window.location.replace("/login");
+    }, 60000);
 
     setInterval(async () => {
   if (!navigator.onLine) return;

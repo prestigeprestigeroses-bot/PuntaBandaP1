@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ingresar — Punta de Banda P1</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111f;--panel:#0f1b2f;--line:#29456f;--text:#eef5ff;--muted:#9bb0d0;--ok:#22c55e;--bad:#fb7185}
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    body{
+      min-height:100vh;
+      margin:0;
+      display:grid;
+      place-items:center;
+      padding:20px;
+      color:var(--text);
+      background:
+        radial-gradient(circle at 18% 10%,rgba(34,197,94,.15),transparent 34%),
+        radial-gradient(circle at 88% 85%,rgba(59,130,246,.18),transparent 38%),
+        linear-gradient(160deg,#07111f,#0b1628 55%,#07111f);
+    }
+    .loginCard{
+      width:min(430px,100%);
+      padding:28px;
+      border:1px solid var(--line);
+      border-radius:20px;
+      background:linear-gradient(180deg,rgba(15,27,47,.98),rgba(10,22,40,.98));
+      box-shadow:0 28px 70px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+    .brandMark{width:15px;height:42px;border-radius:999px;background:var(--ok);box-shadow:0 0 24px rgba(34,197,94,.55)}
+    h1{margin:0;font-size:24px;line-height:1.1}
+    .subtitle{margin:6px 0 0;color:var(--muted);font-size:13px}
+    label{display:block;margin-bottom:8px;color:#c8d8f0;font-weight:750;font-size:13px}
+    input,button{width:100%;border-radius:12px;padding:13px 14px;font-size:15px}
+    input{border:1px solid var(--line);background:#0a1628;color:var(--text);outline:none}
+    input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.16)}
+    button{margin-top:14px;border:1px solid #4ade80;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;font-weight:900;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}
+    .status{min-height:21px;margin-top:12px;color:var(--bad);font-size:13px;text-align:center}
+    .foot{margin:16px 0 0;color:var(--muted);font-size:11px;text-align:center}
+  </style>
+</head>
+<body>
+  <main class="loginCard">
+    <div class="brand">
+      <span class="brandMark" aria-hidden="true"></span>
+      <div>
+        <h1>Punta de Banda P1</h1>
+        <p class="subtitle">Ingrese la contraseña para abrir el sistema.</p>
+      </div>
+    </div>
+
+    <form id="loginForm">
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus />
+      <button id="loginButton" type="submit">Ingresar</button>
+      <div id="loginStatus" class="status" role="alert" aria-live="polite"></div>
+    </form>
+    <p class="foot">La sesión permanece activa durante la jornada o hasta que pulse Cerrar sesión.</p>
+  </main>
+
+  <script>
+    (() => {
+      const form = document.getElementById("loginForm");
+      const password = document.getElementById("password");
+      const button = document.getElementById("loginButton");
+      const status = document.getElementById("loginStatus");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        status.textContent = "";
+        button.disabled = true;
+        button.textContent = "Ingresando…";
+
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: password.value })
+          });
+          const data = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            status.textContent = data.error || "No fue posible ingresar.";
+            password.select();
+            return;
+          }
+
+          window.location.replace("/");
+        } catch {
+          status.textContent = "No hay conexión con el servidor. Intente nuevamente.";
+        } finally {
+          button.disabled = false;
+          button.textContent = "Ingresar";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
