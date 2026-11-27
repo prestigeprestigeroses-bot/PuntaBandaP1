@@ -1281,9 +1281,23 @@ function hideOfflineStatusAfter(ms = 5000) {
   });
 }
 
-  function countsByWorker() {
+function getConfirmedFilteredScans() {
+  return getFilteredScans().filter(r => !r.offline_pending);
+}
+
+function pendingCountsByWorker() {
   const counts = Object.fromEntries(workers.map(w => [w, 0]));
   for (const r of getFilteredScans()) {
+    if (!r.offline_pending) continue;
+    const w = String(r.worker || "").trim().toUpperCase();
+    if (counts[w] != null) counts[w] += 1;
+  }
+  return counts;
+}
+
+  function countsByWorker() {
+  const counts = Object.fromEntries(workers.map(w => [w, 0]));
+  for (const r of getConfirmedFilteredScans()) {
     const w = String(r.worker || "").trim().toUpperCase();
     if (counts[w] != null) counts[w] += 1;
   }
@@ -1405,7 +1419,7 @@ function isReprocesoLaminaRecord(r) {
 
   function stemsByWorkerFiltered() {
   const stems = Object.fromEntries(workers.map(w => [w, 0]));
-  for (const r of getFilteredScans()) {
+  for (const r of getConfirmedFilteredScans()) {
     const w = String(r.worker || "").trim().toUpperCase();
     const t = Number(r.tallos);
     if (stems[w] != null && Number.isFinite(t) && t > 0) stems[w] += t;
@@ -1865,7 +1879,7 @@ function isReprocesoLaminaRecord(r) {
   chart.addEventListener('mouseleave', hideTip);
 
   function scansInWindow() {
-  return getFilteredScans();
+  return getConfirmedFilteredScans();
 }
 
   function breakdownByWorker() {
@@ -1972,12 +1986,14 @@ function isReprocesoLaminaRecord(r) {
   function renderWorkerCards(displayWorkers, counts, stems) {
     const hrs = hoursInWindow();
     const byW = breakdownByWorker();
+    const pendingByWorker = pendingCountsByWorker();
     workerCards.innerHTML = "";
 
     for (const w of displayWorkers) {
       const name = workerNameMap[w] || w;
       const ramos = counts[w] || 0;
       const tallos = stems[w] || 0;
+      const pendingRamos = pendingByWorker[w] || 0;
 
       const rph = hrs > 0 ? (ramos / hrs) : 0;
       const tph = hrs > 0 ? (tallos / hrs) : 0;
@@ -2128,12 +2144,13 @@ function isReprocesoLaminaRecord(r) {
         </div>
 
         <div class="bigNum">${ramos}</div>
-        <div class="bigLab">ramos</div>
+        <div class="bigLab">ramos confirmados en la base de datos</div>
 
         <div class="subRow">
           <span class="subPill"><b>${tallos}</b> tallos</span>
           <span class="subPill"><b>${rph.toFixed(1)}</b> ramos/h</span>
           <span class="subPill"><b>${tph.toFixed(1)}</b> tallos/h</span>
+          ${pendingRamos > 0 ? `<span class="subPill" style="border-color:#f59e0b;color:#fde68a;"><b>${pendingRamos}</b> pendientes de sincronizar</span>` : ""}
         </div>
 
         ${tallosHtml}
@@ -2356,7 +2373,7 @@ function displayLaminaLabel(idOrName, fallbackName = "") {
 }
 
 function renderSummaryByLamina() {
-  const rows = getFilteredScans();
+  const rows = getConfirmedFilteredScans();
   const map = {};
 
   for (const r of rows) {
@@ -2434,7 +2451,7 @@ div.className = `kpiCard laminaCard ${colorClass}`;
 
 
 function renderSummaryByVariedad() {
-  const rows = getFilteredScans();
+  const rows = getConfirmedFilteredScans();
   const map = {};
 
   for (const r of rows) {
@@ -2550,7 +2567,7 @@ function renderManualSpecialSummary() {
     "BAJAS GRANEL": { ramos: 0, tallos: 0, variedades: new Set() }
   };
 
-  for (const r of scans) {
+  for (const r of getConfirmedFilteredScans()) {
     const grado = normalizePlainText(r.grado_cm);
     if (!allowed.has(grado)) continue;
 
@@ -2613,9 +2630,11 @@ function renderManualSpecialSummary() {
 function renderAll() {
   const counts = countsByWorker();
   const stems  = stemsByWorkerFiltered();
+  const pendingCounts = pendingCountsByWorker();
 
-  const displayWorkers = getDisplayWorkers(counts);
-  const graphWorkers = (activeSel.value === "active") ? getActiveWorkers(counts) : displayWorkers;
+  const activityCounts = Object.fromEntries(workers.map(w => [w, (counts[w] || 0) + (pendingCounts[w] || 0)]));
+  const displayWorkers = getDisplayWorkers(activityCounts);
+  const graphWorkers = (activeSel.value === "active") ? getActiveWorkers(activityCounts) : displayWorkers;
 
   buildLegend(displayWorkers);
   drawWorkerChart(graphWorkers, counts, stems);
@@ -3768,9 +3787,11 @@ if (msg.kind === "delete" && msg.id) {
   function renderFast() {
   const counts = countsByWorker();
   const stems  = stemsByWorkerFiltered();
+      const pendingCounts = pendingCountsByWorker();
 
-  const displayWorkers = getDisplayWorkers(counts);
-  const graphWorkers = (activeSel.value === "active") ? getActiveWorkers(counts) : displayWorkers;
+      const activityCounts = Object.fromEntries(workers.map(w => [w, (counts[w] || 0) + (pendingCounts[w] || 0)]));
+      const displayWorkers = getDisplayWorkers(activityCounts);
+      const graphWorkers = (activeSel.value === "active") ? getActiveWorkers(activityCounts) : displayWorkers;
 
   buildLegend(displayWorkers);
   drawWorkerChart(graphWorkers, counts, stems, true);

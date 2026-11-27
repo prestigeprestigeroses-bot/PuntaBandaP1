@@ -87,6 +87,23 @@ test("la cola offline impide sincronizaciones simultáneas", () => {
   assert.match(html, /offlineSyncPromise = performOfflineSync\(\)/);
 });
 
+test("la pantalla separa ramos confirmados de los pendientes offline", () => {
+  const htmlPath = path.join(__dirname, "..", "public", "index.html");
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.match(html, /function getConfirmedFilteredScans\(\)/);
+  assert.match(html, /function pendingCountsByWorker\(\)/);
+  assert.match(html, /ramos confirmados en la base de datos/);
+  assert.match(html, /pendientes de sincronizar/);
+});
+
+test("existe una auditoría agregada de registros activos y eliminados", () => {
+  const serverPath = path.join(__dirname, "..", "server.js");
+  const source = fs.readFileSync(serverPath, "utf8");
+  assert.match(source, /app\.get\("\/api\/scans\/audit-summary"/);
+  assert.match(source, /archivedDeletedCount/);
+  assert.match(source, /totalRecordedIncludingDeleted/);
+});
+
 test("los registros manuales múltiples reciben identificadores independientes", () => {
   const htmlPath = path.join(__dirname, "..", "public", "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");

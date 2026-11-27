@@ -1747,6 +1747,74 @@ app.post("/api/reports/grade-estimate", async (req, res) => {
   }
 });
 
+app.get("/api/scans/audit-summary", async (req, res) => {
+  try {
+    const date = String(req.query?.date || "").trim();
+    const worker = String(req.query?.worker || "").trim().toUpperCase();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !parseHistoricalTimestamp(date, "00:00:00")) {
+      return res.status(400).json({ error: "Fecha inválida" });
+    }
+    if (!/^B(?:0[1-9]|1\d|20)$/.test(worker)) {
+      return res.status(400).json({ error: "Bonchador inválido" });
+    }
+
+    await ensureDataProtectionSchema();
+    const timestampType = await getScansTimestampType();
+    const localTimestampSql = timestampType === "timestamp with time zone"
+      ? "(s.ts AT TIME ZONE 'America/Bogota')"
+      : "s.ts";
+
+    const [activeResult, archivedResult] = await Promise.all([
+      pool.query(
+        `
+        SELECT COUNT(*)::integer AS count
+        FROM public.scans s
+        WHERE UPPER(s.worker) = $2
+          AND (${localTimestampSql})::date = $1::date
+        `,
+        [date, worker]
+      ),
+      pool.query(
+        `
+        SELECT
+          COUNT(*)::integer AS count,
+          COUNT(*) FILTER (WHERE delete_source = 'single')::integer AS single_count,
+          COUNT(*) FILTER (WHERE delete_source = 'batch')::integer AS batch_count,
+          MIN(deleted_at) AS first_deleted_at,
+          MAX(deleted_at) AS last_deleted_at
+        FROM public.scan_deletion_archive
+        WHERE UPPER(scan_data->>'worker') = $2
+          AND COALESCE(
+            NULLIF(delete_metadata->>'date', ''),
+            LEFT(scan_data->>'ts', 10)
+          ) = $1
+        `,
+        [date, worker]
+      ),
+    ]);
+
+    const activeCount = Number(activeResult.rows[0]?.count || 0);
+    const archived = archivedResult.rows[0] || {};
+    const deletedCount = Number(archived.count || 0);
+    return res.json({
+      date,
+      worker,
+      activeCount,
+      archivedDeletedCount: deletedCount,
+      totalRecordedIncludingDeleted: activeCount + deletedCount,
+      deletionSources: {
+        single: Number(archived.single_count || 0),
+        batch: Number(archived.batch_count || 0),
+      },
+      firstDeletedAt: archived.first_deleted_at || null,
+      lastDeletedAt: archived.last_deleted_at || null,
+    });
+  } catch (err) {
+    console.error("GET /api/scans/audit-summary error:", err);
+    return res.status(500).json({ error: "No se pudo auditar los registros" });
+  }
+});
+
 app.post("/api/scans/delete-batch", async (req, res) => {
   let client;
   try {
