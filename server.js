@@ -48,7 +48,7 @@ const WORKER_MAX = 20;
 const REPORT_PASSWORD = process.env.REPORT_PASSWORD || "P1-INFORME-2026";
 const APP_ACCESS_PASSWORD = process.env.APP_ACCESS_PASSWORD || REPORT_PASSWORD;
 const SESSION_COOKIE_NAME = "punta_banda_session";
-const SESSION_DURATION_MS = 16 * 60 * 60 * 1000;
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 10;
 // Pesos base: se varían por variedad/finca y luego se normalizan hasta completar 100%.

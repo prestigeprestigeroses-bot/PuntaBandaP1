@@ -26,7 +26,8 @@ test("crea sesiones firmadas, rechaza alteraciones y respeta el vencimiento", ()
 
   assert.equal(verifySessionToken(token, createdAt), true);
   assert.equal(verifySessionToken(`${token}alterado`, createdAt), false);
-  assert.equal(verifySessionToken(token, createdAt + 16 * 60 * 60 * 1000), false);
+  assert.equal(verifySessionToken(token, createdAt + 23 * 60 * 60 * 1000), true);
+  assert.equal(verifySessionToken(token, createdAt + 24 * 60 * 60 * 1000), false);
 });
 
 test("lee la sesión desde una cabecera de cookies sin exponer la contraseña", () => {
